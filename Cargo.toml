@@ -1,0 +1,10 @@
+[workspace]
+members=[
+    "syntax",
+    "vision",
+    "vm"
+    # "parser",
+     
+    # "semant",
+    # "tox",
+]
