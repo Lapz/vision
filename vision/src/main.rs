@@ -1,38 +1,57 @@
+use compiler::compile;
+use std::env;
+use std::fs::File;
+use std::io::Read;
+use std::path::Path;
 use vm::{chunk::Chunk, op, VM};
 
-fn main() {
-    let mut chunk = Chunk::new();
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let args = env::args().collect::<Vec<String>>();
 
-    let constant = chunk.add_constant(1.2);
+    println!("{:?}", args);
 
-    chunk.write(op::CONSTANT, 123);
-
-    chunk.write(constant as u8, 123);
-
-    let constant = chunk.add_constant(3.4);
-
-    chunk.write(op::CONSTANT, 123);
-
-    chunk.write(constant as u8, 123);
-
-    chunk.write(op::ADD, 123);
-
-    let constant = chunk.add_constant(5.6);
-
-    chunk.write(op::CONSTANT, 123);
-
-    chunk.write(constant as u8, 123);
-
-    chunk.write(op::DIVIDE, 123);
-
-    chunk.write(op::NEGATE, 123);
-
-    chunk.write(op::RETURN, 123);
-
-    // println!("{:#?}", chunk);
-    // chunk.disassemble("test chunk");
+    if args.len() == 1 {
+        repl()?;
+    } else if args.len() == 2 {
+        run_file(&args[1])?;
+    } else {
+        println!("Usage: vision [script]");
+        std::process::exit(64);
+    }
 
     let mut vm = VM::new();
 
-    vm.interpret(chunk);
+    Ok(())
+}
+
+fn interpret(src: &str) -> Result<(), Box<dyn std::error::Error>> {
+    compile(src);
+    Ok(())
+
+    // let mut vm = VM::new();
+
+    // let mut chunk = Chunk::new();
+    // vm.interpret(chunk)
+}
+
+fn repl() -> Result<(), Box<dyn std::error::Error>> {
+    let mut buffer = String::new();
+
+    loop {
+        print!("> ");
+
+        std::io::stdin().read_line(&mut buffer)?;
+
+        interpret(&buffer)?;
+    }
+}
+
+fn run_file(path: &dyn AsRef<Path>) -> Result<(), Box<dyn std::error::Error>> {
+    let mut file = File::open(path)?;
+
+    let mut buffer = String::with_capacity(1024);
+
+    file.read_to_string(&mut buffer)?;
+
+    interpret(&buffer)
 }

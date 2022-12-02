@@ -1,6 +1,6 @@
 [workspace]
 members=[
-    "syntax",
+    "compiler",
     "vision",
     "vm"
     # "parser",

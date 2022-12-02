@@ -1,5 +1,5 @@
 use crate::{chunk::Chunk, op, value::Value};
-
+use std::fmt;
 pub const STACK_MAX: usize = 256;
 
 pub struct VM {
@@ -8,11 +8,22 @@ pub struct VM {
     stack_top: usize,
     ip: usize,
 }
-
+#[derive(Debug)]
 pub enum Error {
     CompileError(String),
     RuntimeError(String),
 }
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Error::CompileError(e) => write!(f, "Compile error: {}", e),
+            Error::RuntimeError(e) => write!(f, "Runtime error: {}", e),
+        }
+    }
+}
+
+impl std::error::Error for Error {}
 
 macro_rules! read_byte {
     ($vm:ident) => {{
@@ -52,12 +63,12 @@ impl VM {
         }
     }
 
-    pub fn interpret(&mut self, chunk: Chunk) -> Result<(), Error> {
+    pub fn interpret(&mut self, chunk: Chunk) -> Result<(), Box<dyn std::error::Error>> {
         self.chunk = chunk;
         return self.run();
     }
 
-    pub fn run(&mut self) -> Result<(), Error> {
+    pub fn run(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         loop {
             let instruction = read_byte!(self);
 
@@ -90,7 +101,7 @@ impl VM {
                 op::MULTIPLY => binary_op!(* , self),
                 op::DIVIDE => binary_op!(/ , self),
 
-                _ => return Err(Error::RuntimeError("Unknown opcode".to_string())),
+                _ => return Err(Box::new(Error::RuntimeError("Unknown opcode".to_string()))),
             }
         }
     }
