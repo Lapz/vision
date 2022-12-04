@@ -19,19 +19,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         std::process::exit(64);
     }
 
-    let mut vm = VM::new();
-
     Ok(())
 }
 
 fn interpret(src: &str) -> Result<(), Box<dyn std::error::Error>> {
-    compile(src);
-    Ok(())
+    let chunk = compile(src).ok_or("Compile error")?;
 
-    // let mut vm = VM::new();
+    let mut vm = VM::new(chunk);
 
-    // let mut chunk = Chunk::new();
-    // vm.interpret(chunk)
+    vm.interpret()
 }
 
 fn repl() -> Result<(), Box<dyn std::error::Error>> {

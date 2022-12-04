@@ -54,17 +54,16 @@ macro_rules! binary_op {
 }
 
 impl VM {
-    pub fn new() -> Self {
+    pub fn new(chunk: Chunk) -> Self {
         Self {
-            chunk: Chunk::new(),
+            chunk,
             stack: [f64::default(); STACK_MAX],
             stack_top: 0,
             ip: 0,
         }
     }
 
-    pub fn interpret(&mut self, chunk: Chunk) -> Result<(), Box<dyn std::error::Error>> {
-        self.chunk = chunk;
+    pub fn interpret(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         return self.run();
     }
 

@@ -1,29 +1,25 @@
+mod parser;
 mod scanner;
 mod token;
 
 use scanner::Scanner;
+use vm::chunk::Chunk;
 
 use crate::token::TokenType;
 
-pub fn compile(input: &str) {
-    let mut scanner = Scanner::new(input);
+pub fn compile(input: &str) -> Option<Chunk> {
+    let scanner = Scanner::new(input);
+    let mut parser = parser::Parser::new(scanner);
 
-    let mut line: usize = 0;
+    parser.advance();
 
-    loop {
-        let token = scanner.scan_token();
+    parser.expression();
 
-        if token.line != line {
-            print!("{:4} ", token.line);
-            line = token.line;
-        } else {
-            print!("   | ");
-        }
+    parser.consume(TokenType::Eof, "Expect end of expression.");
 
-        println!("{:2?} {:<12} {}", token.ty, token.length, token.lexme);
-
-        if token.ty == TokenType::Eof {
-            break;
-        }
+    if parser.had_error {
+        None
+    } else {
+        Some(parser.end())
     }
 }

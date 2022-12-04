@@ -1,3 +1,4 @@
+#[derive(Clone, Copy)]
 pub struct Token<'a> {
     pub ty: TokenType,
     pub lexme: &'a str,
@@ -5,7 +6,7 @@ pub struct Token<'a> {
     pub line: usize,
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash)]
 pub enum TokenType {
     LeftParen,
     RightParen,
