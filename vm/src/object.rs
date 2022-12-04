@@ -1,4 +1,4 @@
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 #[repr(C)]
 pub struct Object {
     pub ty: ObjectType,
@@ -24,6 +24,18 @@ impl Object {
         Object { ty, next }
     }
 }
+
+impl Drop for Object {
+    fn drop(&mut self) {
+        println!("Drop object");
+        match self.ty {
+            ObjectType::String => unsafe {
+                let _ = Box::from_raw(self);
+            },
+        }
+    }
+}
+
 impl<'a> StringObject<'a> {
     /// Create a new string Object that dosen't take ownership of the string passed in
 

@@ -2,7 +2,7 @@ use crate::{
     chunk::Chunk,
     op,
     value::{Value, ValueType},
-    ObjectType, RawObject, StringObject,
+    Object, ObjectType, RawObject, StringObject,
 };
 use std::fmt;
 pub const STACK_MAX: usize = 256;
@@ -232,7 +232,7 @@ pub fn print_object(value: Value) {
     }
 }
 
-pub fn free_object(obj: RawObject) {
+fn free_object(obj: RawObject) {
     let obj_obj = unsafe { &*(obj) };
     match obj_obj.ty {
         ObjectType::String => unsafe {
@@ -252,11 +252,14 @@ impl Drop for VM {
                 print_object(Value::object(obj));
                 print!("\n");
             }
-            let next = unsafe { &*(obj) }.next;
 
-            free_object(obj);
+            unsafe {
+                let next = (&*obj).next;
 
-            obj = next;
+                let _ = *obj;
+
+                obj = next;
+            }
         }
     }
 }
