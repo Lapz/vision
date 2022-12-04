@@ -121,20 +121,43 @@ impl<'a> Parser<'a> {
                         precedence: Precedence::Factor,
                     },
 
-                    TokenType::Bang => ParseRule::default(),
+                    TokenType::Bang => ParseRule {
+                        prefix: Some(Parser::unary),
+                        infix: None,
+                        precedence: Precedence::None,
+                    },
 
                     TokenType::BangEqual => ParseRule {
                         prefix: None,
                         infix: Some(Parser::binary),
-                        precedence: Precedence::Factor,
+                        precedence: Precedence::Equality,
                     },
-                    TokenType::BangEqual => ParseRule::default(),
                     TokenType::Equal => ParseRule::default(),
-                    TokenType::EqualEqual => ParseRule::default(),
-                    TokenType::Greater => ParseRule::default(),
-                    TokenType::GreaterEqual => ParseRule::default(),
-                    TokenType::Less => ParseRule::default(),
-                    TokenType::LessEqual => ParseRule::default(),
+                    TokenType::EqualEqual => ParseRule {
+                        prefix: None,
+                        infix: Some(Parser::binary),
+                        precedence: Precedence::Equality,
+                    },
+                    TokenType::Greater => ParseRule {
+                        prefix: None,
+                        infix: Some(Parser::binary),
+                        precedence: Precedence::Comparison,
+                    },
+                    TokenType::GreaterEqual => ParseRule {
+                        prefix: None,
+                        infix: Some(Parser::binary),
+                        precedence: Precedence::Comparison,
+                    },
+                    TokenType::Less => ParseRule {
+                        prefix: None,
+                        infix: Some(Parser::binary),
+                        precedence: Precedence::Comparison,
+                    },
+                    TokenType::LessEqual => ParseRule {
+                        prefix: None,
+                        infix: Some(Parser::binary),
+                        precedence: Precedence::Comparison,
+                    },
                     TokenType::Identifier => ParseRule::default(),
                     TokenType::String => ParseRule::default(),
                     TokenType::Number => ParseRule {
@@ -145,17 +168,29 @@ impl<'a> Parser<'a> {
                     TokenType::And => ParseRule::default(),
                     TokenType::Class => ParseRule::default(),
                     TokenType::Else => ParseRule::default(),
-                    TokenType::False => ParseRule::default(),
+                    TokenType::False => ParseRule {
+                        prefix: Some(Parser::literal),
+                        infix: None,
+                        precedence: Precedence::None,
+                    },
                     TokenType::For => ParseRule::default(),
                     TokenType::Fun => ParseRule::default(),
                     TokenType::If => ParseRule::default(),
-                    TokenType::Nil => ParseRule::default(),
+                    TokenType::Nil => ParseRule {
+                        prefix: Some(Parser::literal),
+                        infix: None,
+                        precedence: Precedence::None,
+                    },
                     TokenType::Or => ParseRule::default(),
                     TokenType::Print => ParseRule::default(),
                     TokenType::Return => ParseRule::default(),
                     TokenType::Super => ParseRule::default(),
                     TokenType::This => ParseRule::default(),
-                    TokenType::True => ParseRule::default(),
+                    TokenType::True => ParseRule {
+                        prefix: Some(Parser::literal),
+                        infix: None,
+                        precedence: Precedence::None,
+                    },
                     TokenType::Var => ParseRule::default(),
                     TokenType::While => ParseRule::default(),
                     TokenType::Error => ParseRule::default(),
@@ -228,7 +263,7 @@ impl<'a> Parser<'a> {
 
     pub(crate) fn number(&mut self) {
         let value = self.previous.lexme.parse::<f64>().unwrap();
-        self.emit_constant(value);
+        self.emit_constant(Value::number(value));
     }
 
     pub fn emit_constant(&mut self, value: Value) {
@@ -288,7 +323,7 @@ impl<'a> Parser<'a> {
 
         match ty {
             TokenType::Minus => self.emit_byte(op::NEGATE),
-            // TokenType::Bang => self.emit_byte(op::NOT),
+            TokenType::Bang => self.emit_byte(op::NOT),
             _ => unreachable!(),
         }
     }
@@ -301,10 +336,27 @@ impl<'a> Parser<'a> {
         self.parse_with_precedence(rule.precedence.higher());
 
         match ty {
+            TokenType::BangEqual => self.emit_bytes(op::EQUAL, op::NOT),
+            TokenType::EqualEqual => self.emit_byte(op::EQUAL),
+            TokenType::Greater => self.emit_byte(op::GREATER),
+            TokenType::GreaterEqual => self.emit_bytes(op::LESS, op::NOT),
+            TokenType::Less => self.emit_byte(op::LESS),
+            TokenType::LessEqual => self.emit_bytes(op::GREATER, op::NOT),
             TokenType::Plus => self.emit_byte(op::ADD),
             TokenType::Minus => self.emit_byte(op::SUBTRACT),
             TokenType::Star => self.emit_byte(op::MULTIPLY),
             TokenType::Slash => self.emit_byte(op::DIVIDE),
+            _ => unreachable!(),
+        }
+    }
+
+    pub fn literal(&mut self) {
+        let ty = self.previous.ty;
+
+        match ty {
+            TokenType::False => self.emit_byte(op::FALSE),
+            TokenType::Nil => self.emit_byte(op::NIL),
+            TokenType::True => self.emit_byte(op::TRUE),
             _ => unreachable!(),
         }
     }

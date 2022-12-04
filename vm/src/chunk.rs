@@ -3,11 +3,10 @@ use std::ops::Index;
 use crate::op;
 use crate::value::Value;
 
-#[derive(Debug)]
 pub struct Chunk {
     pub code: Vec<u8>,
     pub constants: Vec<Value>,
-    lines: Vec<usize>,
+    pub lines: Vec<usize>,
 }
 
 impl Chunk {
@@ -51,13 +50,20 @@ impl Chunk {
         let instruction = self.code[offset];
 
         match instruction {
-            op::RETURN => self.simple_instruction("OP_RETURN", offset),
-            op::CONSTANT => self.constant_instruction("OP_CONSTANT", offset),
-            op::NEGATE => self.simple_instruction("OP_NEGATE", offset),
-            op::ADD => self.simple_instruction("OP_ADD", offset),
-            op::SUBTRACT => self.simple_instruction("OP_SUBTRACT", offset),
-            op::MULTIPLY => self.simple_instruction("OP_MULTIPLY", offset),
-            op::DIVIDE => self.simple_instruction("OP_DIVIDE", offset),
+            op::RETURN => self.simple_instruction("OP::RETURN", offset),
+            op::CONSTANT => self.constant_instruction("OP::CONSTANT", offset),
+            op::NEGATE => self.simple_instruction("OP::NEGATE", offset),
+            op::ADD => self.simple_instruction("OP::ADD", offset),
+            op::SUBTRACT => self.simple_instruction("OP::SUBTRACT", offset),
+            op::MULTIPLY => self.simple_instruction("OP::MULTIPLY", offset),
+            op::DIVIDE => self.simple_instruction("OP::DIVIDE", offset),
+            op::NIL => self.simple_instruction("OP::NIL", offset),
+            op::TRUE => self.simple_instruction("OP::TRUE", offset),
+            op::FALSE => self.simple_instruction("OP::FALSE", offset),
+            op::NOT => self.simple_instruction("OP::NOT", offset),
+            op::EQUAL => self.simple_instruction("OP::EQUAL", offset),
+            op::GREATER => self.simple_instruction("OP::GREATER", offset),
+            op::LESS => self.simple_instruction("OP::LESS", offset),
             _ => {
                 println!("Unknown opcode {}", instruction);
                 offset + 1
@@ -74,7 +80,9 @@ impl Chunk {
         let constant = self.code[offset + 1];
         println!(
             "{:16}{:4} '{}' ",
-            name, constant, self.constants[constant as usize]
+            name,
+            constant,
+            self.constants[constant as usize].as_number()
         );
         offset + 2
     }
