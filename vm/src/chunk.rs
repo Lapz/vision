@@ -2,6 +2,7 @@ use std::ops::Index;
 
 use crate::op;
 use crate::value::Value;
+use crate::vm::print_value;
 
 pub struct Chunk {
     pub code: Vec<u8>,
@@ -78,12 +79,9 @@ impl Chunk {
 
     pub fn constant_instruction(&self, name: &str, offset: usize) -> usize {
         let constant = self.code[offset + 1];
-        println!(
-            "{:16}{:4} '{}' ",
-            name,
-            constant,
-            self.constants[constant as usize].as_number()
-        );
+        print!("{:16}{:4} '", name, constant);
+        print_value(self.constants[constant as usize]);
+        println!("'");
         offset + 2
     }
 }

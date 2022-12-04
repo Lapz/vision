@@ -2,6 +2,7 @@ use crate::{
     chunk::Chunk,
     op,
     value::{Value, ValueType},
+    ObjectType, RawObject, StringObject,
 };
 use std::fmt;
 pub const STACK_MAX: usize = 256;
@@ -11,6 +12,7 @@ pub struct VM {
     stack: [Value; STACK_MAX],
     stack_top: usize,
     ip: usize,
+    objects: RawObject,
 }
 #[derive(Debug)]
 pub enum Error {
@@ -55,7 +57,7 @@ macro_rules! binary_op {
 
             let b = $self.pop().as_number();
 
-            let a = $self.pop().as_number();;
+            let a = $self.pop().as_number();
 
             $self.push(Value::$val_ty(a $op b));
 
@@ -84,12 +86,13 @@ macro_rules! runtime_error {
 }
 
 impl VM {
-    pub fn new(chunk: Chunk) -> Self {
+    pub fn new(chunk: Chunk, objects: RawObject) -> Self {
         Self {
             chunk,
             stack: [Value::nil(); STACK_MAX],
             stack_top: 0,
             ip: 0,
+            objects,
         }
     }
 
@@ -128,14 +131,28 @@ impl VM {
                 }
                 op::CONSTANT => {
                     let constant = read_constant!(self);
-
-                    print_value(constant);
-                    print!("\n");
+                    #[cfg(not(feature = "debug"))]
+                    {
+                        print_value(constant);
+                        print!("\n");
+                    }
                     self.push(constant);
                 }
                 op::GREATER => binary_op!(bool,>, self),
                 op::LESS => binary_op!(bool,< , self),
-                op::ADD => binary_op!(number,+ , self),
+                op::ADD => {
+                    if self.peek(0).is_string() && self.peek(1).is_string() {
+                        self.concatenate();
+                    } else if self.peek(0).is_number() && self.peek(1).is_number() {
+                        let b = self.pop();
+                        let a = self.pop();
+
+                        self.push(Value::number(a.as_number() + b.as_number()));
+                    } else {
+                        runtime_error!(self, "Operands must be two numbers or two strings.");
+                        return Err(Box::new(Error::RuntimeError));
+                    }
+                }
                 op::SUBTRACT => binary_op!(number,- , self),
                 op::MULTIPLY => binary_op!(number,* , self),
                 op::DIVIDE => binary_op!(number,/ , self),
@@ -178,6 +195,25 @@ impl VM {
     fn peek(&self, distance: i32) -> Value {
         self.stack[self.stack_top - 1 - distance as usize]
     }
+
+    fn concatenate(&mut self) {
+        let b = self.pop();
+        let a = self.pop();
+
+        let mut new_string = String::with_capacity(
+            b.as_string().chars.len() - 1 + a.as_string().chars.len() - 1 + 1,
+        );
+        // We don't include the null terminator in the length of the string.
+        new_string.push_str(&a.as_string().chars[0..a.as_string().chars.len() - 1]);
+
+        new_string.push_str(&b.as_string().chars[0..b.as_string().chars.len() - 1]);
+        new_string.push('\0');
+
+        self.push(Value::object(StringObject::from_owned(
+            new_string,
+            self.objects,
+        )));
+    }
 }
 
 pub fn print_value(value: Value) {
@@ -185,5 +221,42 @@ pub fn print_value(value: Value) {
         ValueType::Bool => print!("{}", value.as_bool()),
         ValueType::Nil => print!("nil"),
         ValueType::Number => print!("{}", value.as_number()),
+        ValueType::Object => print_object(value),
+    }
+}
+
+#[inline]
+pub fn print_object(value: Value) {
+    match value.obj_type() {
+        ObjectType::String => print!("{}", value.as_raw_string()),
+    }
+}
+
+pub fn free_object(obj: RawObject) {
+    let obj_obj = unsafe { &*(obj) };
+    match obj_obj.ty {
+        ObjectType::String => unsafe {
+            let _ = Box::from_raw(obj);
+        },
+    }
+}
+
+impl Drop for VM {
+    fn drop(&mut self) {
+        let mut obj = self.objects;
+
+        while !obj.is_null() {
+            #[cfg(feature = "debug")]
+            {
+                print!("Freeing object ");
+                print_object(Value::object(obj));
+                print!("\n");
+            }
+            let next = unsafe { &*(obj) }.next;
+
+            free_object(obj);
+
+            obj = next;
+        }
     }
 }

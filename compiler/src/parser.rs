@@ -1,11 +1,11 @@
-use std::{collections::HashMap, hash::Hash};
+use std::collections::HashMap;
 
 use crate::{
     scanner::Scanner,
     token::{Token, TokenType},
 };
-use vm::op;
-use vm::{chunk::Chunk, Value};
+use vm::{chunk::Chunk, RawObject, Value};
+use vm::{op, StringObject};
 
 pub struct Parser<'a> {
     scanner: Scanner<'a>,
@@ -15,6 +15,7 @@ pub struct Parser<'a> {
     panic_mode: bool,
     rules: HashMap<TokenType, ParseRule<'a>>,
     current_chunk: Option<Chunk>,
+    objects: RawObject,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
@@ -159,7 +160,11 @@ impl<'a> Parser<'a> {
                         precedence: Precedence::Comparison,
                     },
                     TokenType::Identifier => ParseRule::default(),
-                    TokenType::String => ParseRule::default(),
+                    TokenType::String => ParseRule {
+                        prefix: Some(Parser::string),
+                        infix: None,
+                        precedence: Precedence::None,
+                    },
                     TokenType::Number => ParseRule {
                         prefix: Some(Parser::number),
                         infix: None,
@@ -196,6 +201,7 @@ impl<'a> Parser<'a> {
                     TokenType::Error => ParseRule::default(),
                     TokenType::Eof => ParseRule::default(),
             },
+            objects: std::ptr::null::<RawObject>() as RawObject,
         }
     }
     pub fn advance(&mut self) {
@@ -204,7 +210,7 @@ impl<'a> Parser<'a> {
         loop {
             self.current = self.scanner.scan_token();
 
-            if (self.current.ty != TokenType::Error) {
+            if self.current.ty != TokenType::Error {
                 break;
             }
 
@@ -280,7 +286,7 @@ impl<'a> Parser<'a> {
         self.error_at_current(arg);
     }
 
-    pub fn end(&mut self) -> Chunk {
+    pub fn end(&mut self) -> (Chunk, RawObject) {
         self.emit_return();
 
         let current_chunk = self.current_chunk.take().expect("Chunk not started");
@@ -292,7 +298,7 @@ impl<'a> Parser<'a> {
             }
         }
 
-        current_chunk
+        (current_chunk, self.objects)
     }
 
     fn make_constant(&mut self, value: Value) -> u8 {
@@ -359,6 +365,17 @@ impl<'a> Parser<'a> {
             TokenType::True => self.emit_byte(op::TRUE),
             _ => unreachable!(),
         }
+    }
+
+    pub fn string(&mut self) {
+        let obj = Value::object(StringObject::new(
+            &self.previous.lexme[1..self.previous.lexme.len() - 1],
+            self.objects,
+        ));
+
+        self.objects = obj.as_obj();
+
+        self.emit_constant(obj);
     }
 
     pub(crate) fn parse_with_precedence(&mut self, precedence: Precedence) {

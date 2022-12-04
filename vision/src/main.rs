@@ -23,9 +23,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn interpret(src: &str) -> Result<(), Box<dyn std::error::Error>> {
-    let chunk = compile(src).ok_or("Compile error")?;
+    let (chunk, object_list) = compile(src).ok_or("Compile error")?;
 
-    let mut vm = VM::new(chunk);
+    let mut vm = VM::new(chunk, object_list);
 
     vm.interpret()
 }
@@ -39,7 +39,10 @@ fn repl() -> Result<(), Box<dyn std::error::Error>> {
         std::io::stdin().read_line(&mut buffer)?;
 
         interpret(&buffer)?;
+        break;
     }
+
+    Ok(())
 }
 
 fn run_file(path: &dyn AsRef<Path>) -> Result<(), Box<dyn std::error::Error>> {

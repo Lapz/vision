@@ -3,11 +3,11 @@ mod scanner;
 mod token;
 
 use scanner::Scanner;
-use vm::chunk::Chunk;
+use vm::{chunk::Chunk, RawObject};
 
 use crate::token::TokenType;
 
-pub fn compile(input: &str) -> Option<Chunk> {
+pub fn compile(input: &str) -> Option<(Chunk, RawObject)> {
     let scanner = Scanner::new(input);
     let mut parser = parser::Parser::new(scanner);
 
