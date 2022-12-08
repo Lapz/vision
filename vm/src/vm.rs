@@ -2,17 +2,18 @@ use crate::{
     chunk::Chunk,
     op,
     value::{Value, ValueType},
-    Object, ObjectType, RawObject, StringObject,
+    Object, ObjectType, RawObject, StringObject, Table,
 };
 use std::fmt;
 pub const STACK_MAX: usize = 256;
 
-pub struct VM {
+pub struct VM<'a> {
     chunk: Chunk,
     stack: [Value; STACK_MAX],
     stack_top: usize,
     ip: usize,
     objects: RawObject,
+    strings: Table<'a>,
 }
 #[derive(Debug)]
 pub enum Error {
@@ -85,7 +86,7 @@ macro_rules! runtime_error {
     }};
 }
 
-impl VM {
+impl<'a> VM<'a> {
     pub fn new(chunk: Chunk, objects: RawObject) -> Self {
         Self {
             chunk,
@@ -93,6 +94,7 @@ impl VM {
             stack_top: 0,
             ip: 0,
             objects,
+            strings: Table::new(),
         }
     }
 
@@ -241,7 +243,7 @@ fn free_object(obj: RawObject) {
     }
 }
 
-impl Drop for VM {
+impl<'a> Drop for VM<'a> {
     fn drop(&mut self) {
         let mut obj = self.objects;
 
@@ -254,9 +256,10 @@ impl Drop for VM {
             }
 
             unsafe {
+                println!("{:?}", (&*obj).next);
                 let next = (&*obj).next;
 
-                let _ = *obj;
+                let _ = free_object(obj);
 
                 obj = next;
             }

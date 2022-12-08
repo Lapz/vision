@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 use crate::{
     object::{Object, ObjectType, StringObject},
     RawObject,
@@ -8,6 +10,27 @@ use crate::{
 pub struct Value {
     pub ty: ValueType,
     repr: As,
+}
+
+impl Debug for Value {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Value")
+            .field("ty", &self.ty)
+            .field(
+                "repr",
+                &match self.ty {
+                    ValueType::Bool => self.as_bool_ref() as &dyn Debug,
+                    ValueType::Nil => &"nil" as &dyn Debug,
+
+                    ValueType::Number => self.as_number_ref() as &dyn Debug,
+                    ValueType::Object => match self.obj_type() {
+                        ObjectType::String => self.as_string(),
+                    },
+                    _ => todo!(),
+                },
+            )
+            .finish()
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -69,6 +92,18 @@ impl Value {
     }
 
     #[inline]
+    pub fn as_bool_ref(&self) -> &bool {
+        debug_assert_eq!(
+            self.ty,
+            ValueType::Bool,
+            "Value is type `{:?}` instead of {:?}",
+            self.ty,
+            ValueType::Bool
+        );
+        unsafe { &self.repr.boolean }
+    }
+
+    #[inline]
     pub fn as_number(&self) -> f64 {
         debug_assert_eq!(
             self.ty,
@@ -78,6 +113,17 @@ impl Value {
             ValueType::Number
         );
         unsafe { self.repr.number }
+    }
+
+    pub fn as_number_ref(&self) -> &f64 {
+        debug_assert_eq!(
+            self.ty,
+            ValueType::Number,
+            "Value is type `{:?}` instead of {:?}",
+            self.ty,
+            ValueType::Number
+        );
+        unsafe { &self.repr.number }
     }
 
     #[inline]

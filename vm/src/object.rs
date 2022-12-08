@@ -1,4 +1,6 @@
-#[derive(Clone)]
+use std::mem::ManuallyDrop;
+
+#[derive(Debug, Clone, PartialEq)]
 #[repr(C)]
 pub struct Object {
     pub ty: ObjectType,
@@ -6,14 +8,15 @@ pub struct Object {
 }
 
 pub type RawObject = *mut Object;
-
+#[derive(Debug, PartialEq)]
 pub struct StringObject<'a> {
     _obj: Object,
     pub length: usize,
     pub chars: &'a str,
+    pub hash: u32,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 
 pub enum ObjectType {
     String,
@@ -25,15 +28,15 @@ impl Object {
     }
 }
 
-impl Drop for Object {
-    fn drop(&mut self) {
-        println!("Drop object");
-        match self.ty {
-            ObjectType::String => unsafe {
-                let _ = Box::from_raw(self);
-            },
-        }
+fn hash_string(string: &str) -> u32 {
+    let mut hash = 2166136261u32;
+
+    for c in string.chars() {
+        hash ^= c as u32;
+        hash = hash.wrapping_mul(16777619);
     }
+
+    hash as u32
 }
 
 impl<'a> StringObject<'a> {
@@ -49,11 +52,29 @@ impl<'a> StringObject<'a> {
 
         let s = StringObject {
             _obj: Object::new(ObjectType::String, next),
+            hash: hash_string(&buffer),
             chars: Box::leak(Box::new(buffer)),
             length,
         };
 
         Box::into_raw(Box::new(s)) as RawObject
+    }
+    pub fn new2(string: &'a str, next: RawObject) -> Self {
+        let mut buffer = String::with_capacity(string.len() + 1);
+
+        buffer.push_str(string);
+        buffer.push('\0');
+
+        let length = buffer.len();
+
+        let s = StringObject {
+            _obj: Object::new(ObjectType::String, next),
+            hash: hash_string(&buffer),
+            chars: Box::leak(Box::new(buffer)),
+            length,
+        };
+
+        s
     }
 
     /// Creates a new String Object that takes ownership of the string passed in
@@ -62,6 +83,7 @@ impl<'a> StringObject<'a> {
 
         let s = StringObject {
             _obj: Object::new(ObjectType::String, next),
+            hash: hash_string(&chars),
             chars: Box::leak(Box::new(chars)),
             length,
         };
