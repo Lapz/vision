@@ -203,10 +203,9 @@ impl PartialEq for Value {
             ValueType::Nil => true,
             ValueType::Number => self.as_number() == other.as_number(),
             ValueType::Object => {
-                let as_string = self.as_string();
-                let other_string = other.as_string();
+                println!("{:#?} vs {:#?}", self.as_obj(), other.as_obj());
 
-                as_string.length == other_string.length && as_string.chars == other_string.chars
+                self.as_obj() == other.as_obj()
             }
         }
     }

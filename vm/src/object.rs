@@ -1,6 +1,8 @@
 use std::mem::ManuallyDrop;
 
-#[derive(Debug, Clone, PartialEq)]
+use crate::{Table, Value};
+
+#[derive(Debug, Clone, Copy, PartialEq)]
 #[repr(C)]
 pub struct Object {
     pub ty: ObjectType,
@@ -8,12 +10,12 @@ pub struct Object {
 }
 
 pub type RawObject = *mut Object;
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct StringObject<'a> {
     _obj: Object,
     pub length: usize,
     pub chars: &'a str,
-    pub hash: u32,
+    pub hash: usize,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -28,62 +30,64 @@ impl Object {
     }
 }
 
-fn hash_string(string: &str) -> u32 {
-    let mut hash = 2166136261u32;
+fn hash_string(string: &str) -> usize {
+    let mut hash = 2166136261usize;
 
     for c in string.chars() {
-        hash ^= c as u32;
+        hash ^= c as usize;
         hash = hash.wrapping_mul(16777619);
     }
 
-    hash as u32
+    hash
 }
 
 impl<'a> StringObject<'a> {
     /// Create a new string Object that dosen't take ownership of the string passed in
 
-    pub fn new(string: &'a str, next: RawObject) -> RawObject {
+    pub fn new(string: &'a str, table: &mut Table, next: RawObject) -> RawObject {
         let mut buffer = String::with_capacity(string.len() + 1);
 
         buffer.push_str(string);
         buffer.push('\0');
 
+        let hash = hash_string(&buffer);
         let length = buffer.len();
+
+        let interned = table.find_string(&buffer, hash);
+
+        println!("interned: {:?}", interned);
+        if interned.is_some() {
+            return Box::into_raw(Box::new(interned.unwrap())) as RawObject;
+        }
 
         let s = StringObject {
             _obj: Object::new(ObjectType::String, next),
-            hash: hash_string(&buffer),
+            hash,
             chars: Box::leak(Box::new(buffer)),
             length,
         };
 
-        Box::into_raw(Box::new(s)) as RawObject
-    }
-    pub fn new2(string: &'a str, next: RawObject) -> Self {
-        let mut buffer = String::with_capacity(string.len() + 1);
+        let ptr = Box::into_raw(Box::new(interned.unwrap())) as RawObject;
 
-        buffer.push_str(string);
-        buffer.push('\0');
+        table.set(ptr, Value::nil());
 
-        let length = buffer.len();
-
-        let s = StringObject {
-            _obj: Object::new(ObjectType::String, next),
-            hash: hash_string(&buffer),
-            chars: Box::leak(Box::new(buffer)),
-            length,
-        };
-
-        s
+        ptr
     }
 
     /// Creates a new String Object that takes ownership of the string passed in
-    pub fn from_owned(chars: String, next: RawObject) -> RawObject {
+    pub fn from_owned(chars: String, table: &Table, next: RawObject) -> RawObject {
         let length = chars.len();
+        let hash = hash_string(&chars);
+
+        let interned = table.find_string(&chars, hash);
+
+        if interned.is_some() {
+            return Box::into_raw(Box::new(interned.unwrap())) as RawObject;
+        }
 
         let s = StringObject {
             _obj: Object::new(ObjectType::String, next),
-            hash: hash_string(&chars),
+            hash,
             chars: Box::leak(Box::new(chars)),
             length,
         };

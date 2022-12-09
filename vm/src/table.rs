@@ -162,4 +162,27 @@ impl<'a> Table<'a> {
         self.capacity = new_capacity;
         self.entries = new_entries;
     }
+
+    pub(crate) fn find_string(&self, buffer: &str, hash: usize) -> Option<StringObject<'a>> {
+        if self.count == 0 {
+            return None;
+        }
+
+        let mut index = hash % self.capacity;
+        loop {
+            let entry = &self.entries[index];
+
+            if entry.key.is_none() {
+                if entry.value.is_nil() {
+                    return None;
+                }
+            } else if entry.key.as_ref().unwrap().hash == hash
+                && entry.key.as_ref().unwrap().chars == buffer
+            {
+                return Some(*entry.key.as_ref().unwrap());
+            }
+
+            index = (index + 1) % self.capacity;
+        }
+    }
 }

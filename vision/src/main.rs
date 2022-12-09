@@ -24,51 +24,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn interpret(src: &str) -> Result<(), Box<dyn std::error::Error>> {
-    let (chunk, object_list) = compile(src).ok_or("Compile error")?;
+    let (chunk, table, object_list) = compile(src).ok_or("Compile error")?;
 
-    let mut vm = VM::new(chunk, object_list);
-
-    let mut table = Table::new();
-
-    table.set(
-        StringObject::new2("foo", ptr::null::<RawObject>() as RawObject),
-        Value::number(1.4434),
-    );
-    table.set(
-        StringObject::new2("foo1", ptr::null::<RawObject>() as RawObject),
-        Value::number(1.2),
-    );
-    table.set(
-        StringObject::new2("foo2", ptr::null::<RawObject>() as RawObject),
-        Value::number(1.2),
-    );
-    table.set(
-        StringObject::new2("foo3", ptr::null::<RawObject>() as RawObject),
-        Value::bool(true),
-    );
-    table.set(
-        StringObject::new2("foo4", ptr::null::<RawObject>() as RawObject),
-        Value::number(1.2),
-    );
-    table.set(
-        StringObject::new2("foo5", ptr::null::<RawObject>() as RawObject),
-        Value::number(1.2),
-    );
-    table.set(
-        StringObject::new2("foo6", ptr::null::<RawObject>() as RawObject),
-        Value::number(1.2),
-    );
-    table.set(
-        StringObject::new2("foo7", ptr::null::<RawObject>() as RawObject),
-        Value::number(1.2),
-    );
-
-    table.set(
-        StringObject::new2("foo8", ptr::null::<RawObject>() as RawObject),
-        Value::number(1.2),
-    );
-
-    println!("{:#?}", table);
+    let mut vm = VM::new(chunk, table, object_list);
 
     vm.interpret()
 }

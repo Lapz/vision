@@ -15,6 +15,7 @@ pub struct VM<'a> {
     objects: RawObject,
     strings: Table<'a>,
 }
+
 #[derive(Debug)]
 pub enum Error {
     CompileError(String),
@@ -87,14 +88,14 @@ macro_rules! runtime_error {
 }
 
 impl<'a> VM<'a> {
-    pub fn new(chunk: Chunk, objects: RawObject) -> Self {
+    pub fn new(chunk: Chunk, strings: Table<'a>, objects: RawObject) -> Self {
         Self {
             chunk,
             stack: [Value::nil(); STACK_MAX],
             stack_top: 0,
             ip: 0,
             objects,
-            strings: Table::new(),
+            strings,
         }
     }
 
@@ -211,10 +212,12 @@ impl<'a> VM<'a> {
         new_string.push_str(&b.as_string().chars[0..b.as_string().chars.len() - 1]);
         new_string.push('\0');
 
-        self.push(Value::object(StringObject::from_owned(
+        let result = Value::object(StringObject::from_owned(
             new_string,
+            &mut self.strings,
             self.objects,
-        )));
+        ));
+        self.push(result);
     }
 }
 

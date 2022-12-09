@@ -4,7 +4,7 @@ use crate::{
     scanner::Scanner,
     token::{Token, TokenType},
 };
-use vm::{chunk::Chunk, RawObject, Value};
+use vm::{chunk::Chunk, RawObject, Table, Value};
 use vm::{op, StringObject};
 
 pub struct Parser<'a> {
@@ -16,6 +16,7 @@ pub struct Parser<'a> {
     rules: HashMap<TokenType, ParseRule<'a>>,
     current_chunk: Option<Chunk>,
     objects: RawObject,
+    table: Table<'a>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
@@ -202,6 +203,7 @@ impl<'a> Parser<'a> {
                     TokenType::Eof => ParseRule::default(),
             },
             objects: std::ptr::null::<RawObject>() as RawObject,
+            table: Table::new(),
         }
     }
     pub fn advance(&mut self) {
@@ -286,7 +288,7 @@ impl<'a> Parser<'a> {
         self.error_at_current(arg);
     }
 
-    pub fn end(&mut self) -> (Chunk, RawObject) {
+    pub fn end(mut self) -> (Chunk, Table<'a>, RawObject) {
         self.emit_return();
 
         let current_chunk = self.current_chunk.take().expect("Chunk not started");
@@ -298,7 +300,7 @@ impl<'a> Parser<'a> {
             }
         }
 
-        (current_chunk, self.objects)
+        (current_chunk, self.table, self.objects)
     }
 
     fn make_constant(&mut self, value: Value) -> u8 {
@@ -370,6 +372,7 @@ impl<'a> Parser<'a> {
     pub fn string(&mut self) {
         let obj = Value::object(StringObject::new(
             &self.previous.lexme[1..self.previous.lexme.len() - 1],
+            &mut self.table,
             self.objects,
         ));
 
