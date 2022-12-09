@@ -7,13 +7,13 @@ use crate::{
 use std::fmt;
 pub const STACK_MAX: usize = 256;
 
-pub struct VM<'a> {
+pub struct VM {
     chunk: Chunk,
     stack: [Value; STACK_MAX],
     stack_top: usize,
     ip: usize,
     objects: RawObject,
-    strings: Table<'a>,
+    strings: Table,
 }
 
 #[derive(Debug)]
@@ -87,8 +87,8 @@ macro_rules! runtime_error {
     }};
 }
 
-impl<'a> VM<'a> {
-    pub fn new(chunk: Chunk, strings: Table<'a>, objects: RawObject) -> Self {
+impl VM {
+    pub fn new(chunk: Chunk, strings: Table, objects: RawObject) -> Self {
         Self {
             chunk,
             stack: [Value::nil(); STACK_MAX],
@@ -246,7 +246,7 @@ fn free_object(obj: RawObject) {
     }
 }
 
-impl<'a> Drop for VM<'a> {
+impl Drop for VM {
     fn drop(&mut self) {
         let mut obj = self.objects;
 

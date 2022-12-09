@@ -16,7 +16,7 @@ pub struct Parser<'a> {
     rules: HashMap<TokenType, ParseRule<'a>>,
     current_chunk: Option<Chunk>,
     objects: RawObject,
-    table: Table<'a>,
+    table: Table,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
@@ -288,7 +288,7 @@ impl<'a> Parser<'a> {
         self.error_at_current(arg);
     }
 
-    pub fn end(mut self) -> (Chunk, Table<'a>, RawObject) {
+    pub fn end(mut self) -> (Chunk, Table, RawObject) {
         self.emit_return();
 
         let current_chunk = self.current_chunk.take().expect("Chunk not started");

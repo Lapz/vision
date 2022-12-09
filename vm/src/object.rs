@@ -1,5 +1,3 @@
-use std::mem::ManuallyDrop;
-
 use crate::{Table, Value};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -57,7 +55,7 @@ impl<'a> StringObject<'a> {
 
         println!("interned: {:?}", interned);
         if interned.is_some() {
-            return Box::into_raw(Box::new(interned.unwrap())) as RawObject;
+            return interned.unwrap() as RawObject;
         }
 
         let s = StringObject {
@@ -67,7 +65,7 @@ impl<'a> StringObject<'a> {
             length,
         };
 
-        let ptr = Box::into_raw(Box::new(interned.unwrap())) as RawObject;
+        let ptr = Box::into_raw(Box::new(s)) as RawObject;
 
         table.set(ptr, Value::nil());
 
@@ -82,7 +80,7 @@ impl<'a> StringObject<'a> {
         let interned = table.find_string(&chars, hash);
 
         if interned.is_some() {
-            return Box::into_raw(Box::new(interned.unwrap())) as RawObject;
+            return interned.unwrap();
         }
 
         let s = StringObject {

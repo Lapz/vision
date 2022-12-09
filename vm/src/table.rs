@@ -1,18 +1,18 @@
-use crate::{StringObject, Value};
+use crate::{RawObject, StringObject, Value};
 
 #[derive(Debug)]
-pub struct Table<'a> {
-    pub entries: Vec<Entry<'a>>,
+pub struct Table {
+    pub entries: Vec<Entry>,
     pub count: usize,
     pub capacity: usize,
 }
 #[derive(Debug, PartialEq)]
-pub struct Entry<'a> {
-    pub key: Option<StringObject<'a>>,
+pub struct Entry {
+    pub key: Option<RawObject>,
     pub value: Value,
 }
 
-impl<'a> Entry<'a> {
+impl Entry {
     pub fn new() -> Self {
         Self {
             key: None,
@@ -23,8 +23,9 @@ impl<'a> Entry<'a> {
 
 const MAX_LOAD: f64 = 0.75;
 
-fn find_entry_slot<'a>(entries: &Vec<Entry<'a>>, capacity: usize, key: &StringObject<'a>) -> usize {
-    let mut index = key.hash as usize % capacity;
+fn find_entry_slot(entries: &Vec<Entry>, capacity: usize, key: RawObject) -> usize {
+    let string_object = unsafe { &*(key as *const StringObject) };
+    let mut index = string_object.hash as usize % capacity;
 
     let mut tombstone: Option<usize> = None;
 
@@ -43,7 +44,7 @@ fn find_entry_slot<'a>(entries: &Vec<Entry<'a>>, capacity: usize, key: &StringOb
                     tombstone = Some(index);
                 }
             }
-        } else if entry.key.as_ref() == Some(key) {
+        } else if entry.key == Some(key) {
             return index;
         }
 
@@ -51,7 +52,7 @@ fn find_entry_slot<'a>(entries: &Vec<Entry<'a>>, capacity: usize, key: &StringOb
     }
 }
 
-impl<'a> Table<'a> {
+impl Table {
     pub fn new() -> Self {
         Self {
             entries: vec![],
@@ -60,7 +61,7 @@ impl<'a> Table<'a> {
         }
     }
 
-    pub fn set(&mut self, key: StringObject<'a>, value: Value) -> bool {
+    pub fn set(&mut self, key: RawObject, value: Value) -> bool {
         if (self.count + 1) as f64 > self.capacity as f64 * MAX_LOAD {
             self.adjust_capacity(if self.capacity < 8 {
                 8
@@ -69,7 +70,7 @@ impl<'a> Table<'a> {
             });
         }
 
-        let slot = find_entry_slot(&self.entries, self.capacity, &key);
+        let slot = find_entry_slot(&self.entries, self.capacity, key);
 
         let mut entry = self.entries.get_mut(slot).unwrap();
 
@@ -85,7 +86,7 @@ impl<'a> Table<'a> {
         is_new_key
     }
 
-    pub fn get(&self, key: &StringObject<'a>) -> Option<Value> {
+    pub fn get(&self, key: RawObject) -> Option<Value> {
         if self.count == 0 {
             return None;
         }
@@ -101,7 +102,7 @@ impl<'a> Table<'a> {
         Some(entry.value)
     }
 
-    pub fn delete(&mut self, key: &StringObject<'a>) -> bool {
+    pub fn delete(&mut self, key: RawObject) -> bool {
         if self.count == 0 {
             return false;
         }
@@ -123,7 +124,7 @@ impl<'a> Table<'a> {
         true
     }
 
-    pub fn add_all(&mut self, other: &mut Table<'a>) {
+    pub fn add_all(&mut self, other: &mut Table) {
         let other_entries = std::mem::replace(&mut other.entries, vec![]);
         for entry in other_entries {
             if entry.key.is_none() {
@@ -151,7 +152,7 @@ impl<'a> Table<'a> {
                     return;
                 }
 
-                let dest = find_entry_slot(&new_entries, new_capacity, entry.key.as_ref().unwrap());
+                let dest = find_entry_slot(&new_entries, new_capacity, entry.key.unwrap());
 
                 new_entries[dest] = entry;
 
@@ -163,7 +164,7 @@ impl<'a> Table<'a> {
         self.entries = new_entries;
     }
 
-    pub(crate) fn find_string(&self, buffer: &str, hash: usize) -> Option<StringObject<'a>> {
+    pub(crate) fn find_string(&self, buffer: &str, hash: usize) -> Option<RawObject> {
         if self.count == 0 {
             return None;
         }
@@ -172,14 +173,18 @@ impl<'a> Table<'a> {
         loop {
             let entry = &self.entries[index];
 
-            if entry.key.is_none() {
-                if entry.value.is_nil() {
-                    return None;
+            match entry.key {
+                Some(key) => {
+                    let string_object = unsafe { &*(key as *const StringObject) };
+                    if string_object.hash == hash && string_object.chars == buffer {
+                        return Some(key);
+                    }
                 }
-            } else if entry.key.as_ref().unwrap().hash == hash
-                && entry.key.as_ref().unwrap().chars == buffer
-            {
-                return Some(*entry.key.as_ref().unwrap());
+                None => {
+                    if entry.value.is_nil() {
+                        return None;
+                    }
+                }
             }
 
             index = (index + 1) % self.capacity;
