@@ -53,7 +53,6 @@ impl<'a> StringObject<'a> {
 
         let interned = table.find_string(&buffer, hash);
 
-        println!("interned: {:?}", interned);
         if interned.is_some() {
             return interned.unwrap() as RawObject;
         }

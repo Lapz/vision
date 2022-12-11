@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
+    local::Compiler,
     scanner::Scanner,
     token::{Token, TokenType},
 };
@@ -17,6 +18,7 @@ pub struct Parser<'a> {
     current_chunk: Option<Chunk>,
     objects: RawObject,
     table: Table,
+    compiler: Option<Compiler<'a>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
@@ -160,7 +162,11 @@ impl<'a> Parser<'a> {
                         infix: Some(Parser::binary),
                         precedence: Precedence::Comparison,
                     },
-                    TokenType::Identifier => ParseRule::default(),
+                    TokenType::Identifier => ParseRule {
+                        prefix: Some(Parser::variable),
+                        infix: None,
+                        precedence: Precedence::None,
+                    },
                     TokenType::String => ParseRule {
                         prefix: Some(Parser::string),
                         infix: None,
@@ -204,6 +210,7 @@ impl<'a> Parser<'a> {
             },
             objects: std::ptr::null::<RawObject>() as RawObject,
             table: Table::new(),
+            compiler: None,
         }
     }
     pub fn advance(&mut self) {
@@ -269,7 +276,7 @@ impl<'a> Parser<'a> {
         self.parse_with_precedence(Precedence::Assignment);
     }
 
-    pub(crate) fn number(&mut self) {
+    pub(crate) fn number(&mut self, _can_assign: bool) {
         let value = self.previous.lexme.parse::<f64>().unwrap();
         self.emit_constant(Value::number(value));
     }
@@ -318,13 +325,13 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub(crate) fn grouping(&mut self) {
+    pub(crate) fn grouping(&mut self, _can_assign: bool) {
         self.expression();
 
         self.consume(TokenType::RightParen, "Expect ')' after expression.");
     }
 
-    pub(crate) fn unary(&mut self) {
+    pub(crate) fn unary(&mut self, _can_assign: bool) {
         let ty = self.previous.ty;
 
         self.parse_with_precedence(Precedence::Unary);
@@ -358,7 +365,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn literal(&mut self) {
+    pub fn literal(&mut self, _can_assign: bool) {
         let ty = self.previous.ty;
 
         match ty {
@@ -369,7 +376,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn string(&mut self) {
+    pub fn string(&mut self, _can_assign: bool) {
         let obj = Value::object(StringObject::new(
             &self.previous.lexme[1..self.previous.lexme.len() - 1],
             &mut self.table,
@@ -386,8 +393,10 @@ impl<'a> Parser<'a> {
 
         let prefix_rule = self.get_rule(self.previous.ty).prefix;
 
+        let can_assign = precedence <= Precedence::Assignment;
+
         match prefix_rule {
-            Some(prefix_rule) => prefix_rule(self),
+            Some(prefix_rule) => prefix_rule(self, can_assign),
             None => {
                 self.error("Expect expression.");
             }
@@ -410,11 +419,142 @@ impl<'a> Parser<'a> {
     fn get_rule(&self, ty: TokenType) -> ParseRule<'a> {
         self.rules[&ty]
     }
+
+    pub(crate) fn match_token(&mut self, ty: TokenType) -> bool {
+        if !self.check(ty) {
+            return false;
+        }
+        self.advance();
+
+        true
+    }
+
+    pub(crate) fn declaration(&mut self) {
+        if self.match_token(TokenType::Var) {
+            self.var_declaration();
+        } else {
+            self.statement();
+        }
+
+        if self.panic_mode {
+            self.synchronize();
+        }
+    }
+
+    fn statement(&mut self) {
+        if self.match_token(TokenType::Print) {
+            self.print_statement();
+        } else if self.match_token(TokenType::LeftBrace) {
+            self.begin_scope();
+            self.block();
+            self.end_scope();
+        } else {
+            self.expression_statement();
+        }
+    }
+
+    fn check(&self, ty: TokenType) -> bool {
+        self.current.ty == ty
+    }
+
+    fn print_statement(&mut self) {
+        self.expression();
+        self.consume(TokenType::SemiColon, "Expect ';' after value.");
+        self.emit_byte(op::PRINT)
+    }
+
+    fn expression_statement(&mut self) {
+        self.expression();
+        self.consume(TokenType::SemiColon, "Expected ';' after expression.");
+        self.emit_byte(op::POP);
+    }
+
+    fn synchronize(&mut self) {
+        self.panic_mode = false;
+
+        while self.current.ty != TokenType::Eof {
+            if self.previous.ty == TokenType::SemiColon {
+                return;
+            }
+
+            match self.current.ty {
+                TokenType::Class
+                | TokenType::Fun
+                | TokenType::Var
+                | TokenType::For
+                | TokenType::If
+                | TokenType::While
+                | TokenType::Print
+                | TokenType::Return => return,
+                _ => {}
+            }
+
+            self.advance();
+        }
+    }
+
+    fn var_declaration(&mut self) {
+        let global = self.parse_variable("Expect variable name.");
+
+        if self.match_token(TokenType::Equal) {
+            self.expression()
+        } else {
+            self.emit_byte(op::NIL)
+        }
+
+        self.consume(
+            TokenType::SemiColon,
+            "Expected ';' after variable declaration",
+        );
+
+        self.define_global(global)
+    }
+
+    fn parse_variable(&mut self, error_msg: &str) -> u8 {
+        self.consume(TokenType::Identifier, error_msg);
+        self.identifier_constant(self.previous.lexme)
+    }
+
+    fn define_global(&mut self, global: u8) {
+        self.emit_bytes(op::DEFINE_GLOBAL, global)
+    }
+
+    fn identifier_constant(&mut self, lexme: &str) -> u8 {
+        let val = Value::object(StringObject::new(lexme, &mut self.table, self.objects));
+        self.make_constant(val)
+    }
+
+    fn variable(&mut self, can_assign: bool) {
+        self.named_variable(self.previous.lexme, can_assign);
+    }
+
+    fn named_variable(&mut self, lexme: &str, can_assign: bool) {
+        let arg = self.identifier_constant(lexme);
+
+        if can_assign && self.match_token(TokenType::Equal) {
+            self.expression();
+            self.emit_bytes(op::SET_GLOBAL, arg);
+        } else {
+            self.emit_bytes(op::GET_GLOBAL, arg)
+        }
+    }
+
+    fn begin_scope(&mut self) {
+        self.compiler
+            .expect("Started compiling a block with no compiler")
+            .scope_depth += 1
+    }
+
+    fn end_scope(&self) -> _ {
+        self.compiler
+            .expect("Started compiling a block with no compiler")
+            .scope_depth -= 1
+    }
 }
 
 #[derive(Clone, Copy)]
 struct ParseRule<'a> {
-    prefix: Option<fn(&mut Parser<'a>)>,
+    prefix: Option<fn(&mut Parser<'a>, bool)>,
     infix: Option<fn(&mut Parser<'a>)>,
     precedence: Precedence,
 }

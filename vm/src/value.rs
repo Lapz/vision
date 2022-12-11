@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 
 use crate::{
-    object::{Object, ObjectType, StringObject},
+    object::{ObjectType, StringObject},
     RawObject,
 };
 
@@ -26,7 +26,6 @@ impl Debug for Value {
                     ValueType::Object => match self.obj_type() {
                         ObjectType::String => self.as_string(),
                     },
-                    _ => todo!(),
                 },
             )
             .finish()

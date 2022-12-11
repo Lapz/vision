@@ -1,6 +1,7 @@
 mod parser;
 mod scanner;
 mod token;
+mod local;
 
 use scanner::Scanner;
 use vm::{chunk::Chunk, RawObject, Table};
@@ -13,9 +14,9 @@ pub fn compile(input: &str) -> Option<(Chunk, Table, RawObject)> {
 
     parser.advance();
 
-    parser.expression();
-
-    parser.consume(TokenType::Eof, "Expect end of expression.");
+    while !parser.match_token(TokenType::Eof) {
+        parser.declaration();
+    }
 
     if parser.had_error {
         None

@@ -65,6 +65,11 @@ impl Chunk {
             op::EQUAL => self.simple_instruction("OP::EQUAL", offset),
             op::GREATER => self.simple_instruction("OP::GREATER", offset),
             op::LESS => self.simple_instruction("OP::LESS", offset),
+            op::PRINT => self.simple_instruction("OP::PRINT", offset),
+            op::POP => self.simple_instruction("OP::POP", offset),
+            op::DEFINE_GLOBAL => self.simple_instruction("OP::DEFINE_GLOBAL", offset),
+            op::GET_GLOBAL => self.simple_instruction("OP::GET_GLOBAL", offset),
+            op::SET_GLOBAL => self.simple_instruction("OP::SET_GLOBAL", offset),
             _ => {
                 println!("Unknown opcode {}", instruction);
                 offset + 1

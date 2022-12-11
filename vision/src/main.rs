@@ -1,10 +1,9 @@
 use compiler::compile;
+use std::env;
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
-use std::{env, ptr};
-use vm::RawObject;
-use vm::{chunk::Chunk, op, StringObject, Table, Value, VM};
+use vm::VM;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = env::args().collect::<Vec<String>>();

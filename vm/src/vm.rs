@@ -2,7 +2,7 @@ use crate::{
     chunk::Chunk,
     op,
     value::{Value, ValueType},
-    Object, ObjectType, RawObject, StringObject, Table,
+    ObjectType, RawObject, StringObject, Table,
 };
 use std::fmt;
 pub const STACK_MAX: usize = 256;
@@ -14,6 +14,7 @@ pub struct VM {
     ip: usize,
     objects: RawObject,
     strings: Table,
+    globals: Table,
 }
 
 #[derive(Debug)]
@@ -71,14 +72,14 @@ macro_rules! runtime_error {
         $crate::eprint!("\n")
     };
     ($self:ident,$($arg:tt)*) => {{
-        eprintln!($($arg)*);
+        eprint!($($arg)*);
 
         let instruction = $self.ip - $self.chunk.code[$self.ip - 1] as usize;
 
         let line = $self.chunk.lines[instruction];
 
 
-        eprintln!("[line {}] in script", line);
+        eprintln!(" [line {}] in script", line);
 
 
         $self.reset_stack();
@@ -96,6 +97,7 @@ impl VM {
             ip: 0,
             objects,
             strings,
+            globals: Table::new(),
         }
     }
 
@@ -134,7 +136,7 @@ impl VM {
                 }
                 op::CONSTANT => {
                     let constant = read_constant!(self);
-                    #[cfg(not(feature = "debug"))]
+                    #[cfg(feature = "debug")]
                     {
                         print_value(constant);
                         print!("\n");
@@ -170,6 +172,55 @@ impl VM {
                     let b = self.pop();
                     let a = self.pop();
                     self.push(Value::bool(a == b));
+                }
+                op::PRINT => {
+                    let val = self.pop();
+                    print_value(val);
+                    print!("\n");
+                }
+                op::POP => {
+                    self.pop();
+                }
+
+                op::DEFINE_GLOBAL => {
+                    let name = read_constant!(self).as_obj();
+                    let val = self.peek(0);
+                    self.globals.set(name, val);
+
+                    self.pop();
+                }
+                op::GET_GLOBAL => {
+                    let val = read_constant!(self);
+
+                    let obj_ptr = val.as_obj();
+
+                    let as_str = val.as_string();
+
+                    let val = self.globals.get(obj_ptr);
+
+                    if val.is_none() {
+                        runtime_error!(self, "Undefined variable '{}'", as_str.chars);
+                        return Err(Box::new(Error::RuntimeError));
+                    }
+
+                    self.push(val.unwrap());
+                }
+
+                op::SET_GLOBAL => {
+                    let global_val = read_constant!(self);
+
+                    let obj_ptr = global_val.as_obj();
+
+                    let as_str = global_val.as_string();
+
+                    let value = self.peek(0);
+
+                    if self.globals.set(obj_ptr, value) {
+                        runtime_error!(self, "Undefined variable '{}'", as_str.chars);
+                        return Err(Box::new(Error::RuntimeError));
+                    }
+
+                    // self.push(val.unwrap());
                 }
 
                 _ => {
@@ -259,7 +310,6 @@ impl Drop for VM {
             }
 
             unsafe {
-                println!("{:?}", (&*obj).next);
                 let next = (&*obj).next;
 
                 let _ = free_object(obj);
