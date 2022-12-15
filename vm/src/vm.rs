@@ -43,6 +43,16 @@ macro_rules! read_byte {
     }};
 }
 
+macro_rules! read_short {
+    ($vm:ident) => {{
+        $vm.ip += 2;
+
+        let temp = $vm.ip;
+
+        ($vm.chunk[temp - 2] as u16) << 8 | $vm.chunk[temp - 1] as u16
+    }};
+}
+
 macro_rules! read_constant {
     ($vm:ident) => {{
         $vm.chunk.constants[read_byte!($vm) as usize]
@@ -109,7 +119,7 @@ impl VM {
         loop {
             let instruction = read_byte!(self);
 
-            #[cfg(feature = "trace_execution")]
+            #[cfg(feature = "trace")]
             {
                 print!("          ");
                 for slot in 0..self.stack_top {
@@ -235,6 +245,25 @@ impl VM {
                     let val = self.peek(0);
 
                     self.stack[slot as usize] = val;
+                }
+                op::JUMP_IF_FALSE => {
+                    let offset = read_short!(self) as usize;
+
+                    if self.peek(0).is_falsey() {
+                        self.ip += offset;
+                    }
+                }
+
+                op::JUMP => {
+                    let offset = read_short!(self) as usize;
+
+                    self.ip += offset;
+                }
+
+                op::LOOP => {
+                    let offset = read_short!(self) as usize;
+
+                    self.ip -= offset;
                 }
 
                 _ => {

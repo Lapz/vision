@@ -19,3 +19,6 @@ pub const GET_GLOBAL: u8 = 17;
 pub const SET_GLOBAL: u8 = 18;
 pub const GET_LOCAL: u8 = 19;
 pub const SET_LOCAL: u8 = 20;
+pub const JUMP_IF_FALSE: u8 = 21;
+pub const JUMP: u8 = 22;
+pub const LOOP: u8 = 23;

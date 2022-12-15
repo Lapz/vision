@@ -8,6 +8,6 @@ edition = "2021"
 [dependencies]
 
 [features]
-debug = ["trace_execution"]
-trace_execution= []
+debug = ["trace"]
+trace= []
 default = []

@@ -8,3 +8,9 @@ edition = "2021"
 [dependencies]
 vm={path="../vm"}
 compiler={path="../compiler"}
+
+
+[features]
+debug = ["trace"]
+trace = []
+default = ["debug"]

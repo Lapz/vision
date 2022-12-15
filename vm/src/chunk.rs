@@ -72,6 +72,9 @@ impl Chunk {
             op::SET_GLOBAL => self.simple_instruction("OP::SET_GLOBAL", offset),
             op::GET_LOCAL => self.byte_instruction("OP::GET_LOCAL", offset),
             op::SET_LOCAL => self.byte_instruction("OP::GET_LOCAL", offset),
+            op::JUMP => self.jump_instruction("op::JUMP", 1, offset),
+            op::JUMP_IF_FALSE => self.jump_instruction("op::JUMP_IF_FALSE", 1, offset),
+            op::LOOP => self.jump_instruction("OP::LOOP", -1, offset),
 
             _ => {
                 println!("Unknown opcode {}", instruction);
@@ -97,6 +100,18 @@ impl Chunk {
         let slot = self.code[offset + 1];
         println!("{:16}{:4} ", arg, slot);
         offset + 2
+    }
+
+    pub(crate) fn jump_instruction(&self, arg: &str, sign: isize, offset: usize) -> usize {
+        let mut jump = ((self.code[offset + 1] as u16) << 8) as usize;
+        jump |= self.code[offset + 2] as usize;
+        println!(
+            "{:16} {:4} -> {} ",
+            arg,
+            offset,
+            offset as isize + 3 + (sign * jump as isize)
+        );
+        offset + 3
     }
 }
 
