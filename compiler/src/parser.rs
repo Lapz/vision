@@ -5,7 +5,7 @@ use crate::{
     scanner::Scanner,
     token::{Token, TokenType},
 };
-use vm::{chunk::Chunk, RawObject, Table, Value};
+use vm::{chunk::Chunk, op::GET_GLOBAL, RawObject, Table, Value};
 use vm::{op, StringObject};
 
 pub struct Parser<'a> {
@@ -210,7 +210,7 @@ impl<'a> Parser<'a> {
             },
             objects: std::ptr::null::<RawObject>() as RawObject,
             table: Table::new(),
-            compiler: None,
+            compiler: Some(Compiler::new()),
         }
     }
     pub fn advance(&mut self) {
@@ -507,15 +507,38 @@ impl<'a> Parser<'a> {
             "Expected ';' after variable declaration",
         );
 
-        self.define_global(global)
+        self.define_variable(global)
     }
 
     fn parse_variable(&mut self, error_msg: &str) -> u8 {
         self.consume(TokenType::Identifier, error_msg);
+
+        self.declare_variable();
+
+        if self
+            .compiler
+            .as_ref()
+            .expect("Started compiling a block with no compiler")
+            .scope_depth
+            > 0
+        {
+            return 0;
+        }
         self.identifier_constant(self.previous.lexme)
     }
 
-    fn define_global(&mut self, global: u8) {
+    fn mark_initialized(&mut self) {
+        let current_depth = self.compiler.as_ref().unwrap().scope_depth;
+
+        let slot = self.compiler.as_ref().unwrap().local_count - 1;
+
+        self.compiler.as_mut().unwrap().locals[slot].depth = current_depth
+    }
+    fn define_variable(&mut self, global: u8) {
+        if self.compiler.as_ref().unwrap().scope_depth > 0 {
+            self.mark_initialized();
+            return;
+        }
         self.emit_bytes(op::DEFINE_GLOBAL, global)
     }
 
@@ -528,27 +551,117 @@ impl<'a> Parser<'a> {
         self.named_variable(self.previous.lexme, can_assign);
     }
 
-    fn named_variable(&mut self, lexme: &str, can_assign: bool) {
-        let arg = self.identifier_constant(lexme);
+    fn named_variable(&mut self, name: &str, can_assign: bool) {
+        let get_op;
+
+        let set_op;
+
+        let arg = {
+            let arg = self.resolve_local(name);
+
+            if arg.is_none() {
+                get_op = op::GET_GLOBAL;
+                set_op = op::SET_GLOBAL;
+                self.identifier_constant(name)
+            } else {
+                get_op = op::GET_LOCAL;
+                set_op = op::SET_LOCAL;
+                arg.unwrap()
+            }
+        };
 
         if can_assign && self.match_token(TokenType::Equal) {
             self.expression();
-            self.emit_bytes(op::SET_GLOBAL, arg);
+            self.emit_bytes(set_op, arg);
         } else {
-            self.emit_bytes(op::GET_GLOBAL, arg)
+            self.emit_bytes(get_op, arg)
         }
     }
 
     fn begin_scope(&mut self) {
         self.compiler
+            .as_mut()
             .expect("Started compiling a block with no compiler")
             .scope_depth += 1
     }
 
-    fn end_scope(&self) -> _ {
+    fn end_scope(&mut self) {
         self.compiler
+            .as_mut()
             .expect("Started compiling a block with no compiler")
-            .scope_depth -= 1
+            .scope_depth -= 1;
+
+        while self.compiler.as_ref().unwrap().local_count > 0
+            && self.compiler.as_ref().unwrap().locals
+                [self.compiler.as_ref().unwrap().local_count - 1]
+                .depth
+                > self.compiler.as_ref().unwrap().scope_depth
+        {
+            self.emit_byte(op::POP);
+            self.compiler.as_mut().unwrap().local_count -= 1;
+        }
+    }
+
+    fn block(&mut self) {
+        while !self.check(TokenType::RightBrace) && !self.check(TokenType::Eof) {
+            self.declaration();
+        }
+
+        self.consume(TokenType::RightBrace, "Expected '}' after block.")
+    }
+
+    fn declare_variable(&mut self) {
+        if self.compiler.as_ref().unwrap().scope_depth == 0 {
+            return;
+        }
+
+        for i in (0..self.compiler.as_ref().unwrap().local_count).rev() {
+            let local = self.compiler.as_ref().unwrap().locals[i];
+
+            if local.depth != -1 && local.depth < self.compiler.as_ref().unwrap().scope_depth {
+                break;
+            }
+
+            if local.name.lexme == self.previous.lexme {
+                self.error("Already a variable with this name in scope")
+            }
+        }
+
+        self.add_local(self.previous);
+    }
+
+    fn add_local(&mut self, name: Token<'a>) {
+        let compiler = self
+            .compiler
+            .as_mut()
+            .expect("Started compiling a block with no compiler");
+
+        if compiler.local_count == 256 {
+            self.error("Too many local variables in function");
+            return;
+        }
+        let slot = compiler.local_count;
+
+        compiler.local_count += 1;
+
+        compiler.locals[slot].name = name;
+        compiler.locals[slot].depth = -1;
+
+        // todo!()
+    }
+
+    fn resolve_local(&mut self, name: &str) -> Option<u8> {
+        for i in (0..self.compiler.as_ref().unwrap().local_count).rev() {
+            let local = self.compiler.as_ref().unwrap().locals[i];
+
+            if local.name.lexme == name {
+                if local.depth == -1 {
+                    self.error("Cant'read local variable in its own initializer")
+                }
+                return Some(i as u8);
+            }
+        }
+        None
     }
 }
 

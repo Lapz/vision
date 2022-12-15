@@ -223,6 +223,20 @@ impl VM {
                     // self.push(val.unwrap());
                 }
 
+                op::GET_LOCAL => {
+                    let slot = read_byte!(self);
+
+                    self.push(self.stack[slot as usize])
+                }
+
+                op::SET_LOCAL => {
+                    let slot = read_byte!(self);
+
+                    let val = self.peek(0);
+
+                    self.stack[slot as usize] = val;
+                }
+
                 _ => {
                     runtime_error!(self, "Unknown opcode");
 

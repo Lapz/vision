@@ -70,6 +70,9 @@ impl Chunk {
             op::DEFINE_GLOBAL => self.simple_instruction("OP::DEFINE_GLOBAL", offset),
             op::GET_GLOBAL => self.simple_instruction("OP::GET_GLOBAL", offset),
             op::SET_GLOBAL => self.simple_instruction("OP::SET_GLOBAL", offset),
+            op::GET_LOCAL => self.byte_instruction("OP::GET_LOCAL", offset),
+            op::SET_LOCAL => self.byte_instruction("OP::GET_LOCAL", offset),
+
             _ => {
                 println!("Unknown opcode {}", instruction);
                 offset + 1
@@ -87,6 +90,12 @@ impl Chunk {
         print!("{:16}{:4} '", name, constant);
         print_value(self.constants[constant as usize]);
         println!("'");
+        offset + 2
+    }
+
+    pub(crate) fn byte_instruction(&self, arg: &str, offset: usize) -> usize {
+        let slot = self.code[offset + 1];
+        println!("{:16}{:4} ", arg, slot);
         offset + 2
     }
 }
