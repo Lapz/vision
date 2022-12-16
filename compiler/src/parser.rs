@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 
 use crate::{
-    local::Compiler,
+    compiler::{Compiler, FunctionType},
     scanner::Scanner,
     token::{Token, TokenType},
 };
-use vm::{chunk::Chunk, op::GET_GLOBAL, RawObject, Table, Value};
+use vm::{chunk::Chunk, FunctionObject, RawObject, Table, Value};
 use vm::{op, StringObject};
 
 pub struct Parser<'a> {
@@ -15,7 +15,6 @@ pub struct Parser<'a> {
     pub had_error: bool,
     panic_mode: bool,
     rules: HashMap<TokenType, ParseRule<'a>>,
-    current_chunk: Option<Chunk>,
     objects: RawObject,
     table: Table,
     compiler: Option<Compiler<'a>>,
@@ -88,7 +87,6 @@ impl<'a> Parser<'a> {
             },
             had_error: false,
             panic_mode: false,
-            current_chunk: Some(Chunk::new()),
             rules: hashmap! {
                     TokenType::LeftParen => ParseRule {
                         prefix: Some(Parser::grouping),
@@ -218,7 +216,7 @@ impl<'a> Parser<'a> {
             },
             objects: std::ptr::null::<RawObject>() as RawObject,
             table: Table::new(),
-            compiler: Some(Compiler::new()),
+            compiler: Some(Compiler::new(FunctionType::Script)),
         }
     }
     pub fn advance(&mut self) {
@@ -265,10 +263,8 @@ impl<'a> Parser<'a> {
     }
 
     pub fn emit_byte(&mut self, byte: u8) {
-        self.current_chunk
-            .as_mut()
-            .expect("Called emit when chunk not started")
-            .write(byte, self.previous.line);
+        let line = self.previous.line;
+        self.current_chunk_mut().write(byte, line);
     }
 
     fn emit_bytes(&mut self, byte1: u8, byte2: u8) {
@@ -294,6 +290,14 @@ impl<'a> Parser<'a> {
         self.emit_bytes(op::CONSTANT, constant);
     }
 
+    pub fn end_compiler(&mut self) -> Option<FunctionObject<'a>> {
+        self.emit_return();
+
+        let function = self.compiler.take().unwrap().function;
+
+        function
+    }
+
     pub(crate) fn consume(&mut self, ty: TokenType, arg: &str) {
         if self.current.ty == ty {
             self.advance();
@@ -303,27 +307,50 @@ impl<'a> Parser<'a> {
         self.error_at_current(arg);
     }
 
-    pub fn end(mut self) -> (Chunk, Table, RawObject) {
+    pub fn end(mut self) -> (Option<FunctionObject<'a>>, Table, RawObject) {
         self.emit_return();
 
-        let current_chunk = self.current_chunk.take().expect("Chunk not started");
+        let function = self.compiler.take().unwrap().function;
 
         #[cfg(feature = "debug")]
         {
             if !self.had_error {
-                current_chunk.disassemble("code");
+                self.current_chunk
+                    .as_ref()
+                    .unwrap()
+                    .disassemble(match function.name {
+                        Some(name) => name.chars,
+                        None => "<script>",
+                    });
             }
         }
 
-        (current_chunk, self.table, self.objects)
+        (function, self.table, self.objects)
+    }
+    pub fn current_chunk(&self) -> &Chunk {
+        &self
+            .compiler
+            .as_ref()
+            .unwrap()
+            .function
+            .as_ref()
+            .unwrap()
+            .chunk
+    }
+
+    pub fn current_chunk_mut(&mut self) -> &mut Chunk {
+        &mut self
+            .compiler
+            .as_mut()
+            .unwrap()
+            .function
+            .as_mut()
+            .unwrap()
+            .chunk
     }
 
     fn make_constant(&mut self, value: Value) -> u8 {
-        let constant = self
-            .current_chunk
-            .as_mut()
-            .expect("Called emit when chunk not started")
-            .add_constant(value);
+        let constant = self.current_chunk_mut().add_constant(value);
 
         if constant > u8::MAX as usize {
             self.error("Too many constants in one chunk.");
@@ -440,6 +467,8 @@ impl<'a> Parser<'a> {
     pub(crate) fn declaration(&mut self) {
         if self.match_token(TokenType::Var) {
             self.var_declaration();
+        } else if self.match_token(TokenType::Fun) {
+            self.fun_declaration();
         } else {
             self.statement();
         }
@@ -543,6 +572,10 @@ impl<'a> Parser<'a> {
 
     fn mark_initialized(&mut self) {
         let current_depth = self.compiler.as_ref().unwrap().scope_depth;
+
+        if current_depth == 0 {
+            return;
+        }
 
         let slot = self.compiler.as_ref().unwrap().local_count - 1;
 
@@ -660,8 +693,6 @@ impl<'a> Parser<'a> {
 
         compiler.locals[slot].name = name;
         compiler.locals[slot].depth = -1;
-
-        // todo!()
     }
 
     fn resolve_local(&mut self, name: &str) -> Option<u8> {
@@ -703,19 +734,18 @@ impl<'a> Parser<'a> {
     fn emit_jump(&mut self, jump_if_false: u8) -> usize {
         self.emit_byte(jump_if_false);
         self.emit_bytes(0xff, 0xff);
-        self.current_chunk.as_ref().unwrap().code.len() - 2
+        self.current_chunk().code.len() - 2
     }
 
     fn patch_jump(&mut self, offset: usize) {
-        let jump = (self.current_chunk.as_ref().unwrap().code.len() - offset - 2) as u16;
+        let jump = (self.current_chunk().code.len() - offset - 2) as u16;
 
         if jump >= u16::MAX {
             self.error("Too much code to jump over.")
         }
 
-        self.current_chunk.as_mut().unwrap().code[offset] = ((jump >> 8) & 0xff) as u8;
-
-        self.current_chunk.as_mut().unwrap().code[offset + 1] = (jump & 0xff) as u8;
+        self.current_chunk_mut().code[offset] = ((jump >> 8) & 0xff) as u8;
+        self.current_chunk_mut().code[offset + 1] = (jump & 0xff) as u8;
     }
 
     fn and(&mut self) {
@@ -742,7 +772,7 @@ impl<'a> Parser<'a> {
     }
 
     fn while_statement(&mut self) {
-        let loop_start = self.current_chunk.as_ref().unwrap().code.len();
+        let loop_start = self.current_chunk().code.len();
 
         self.consume(TokenType::LeftParen, "Expected '(' after 'while'.");
 
@@ -766,7 +796,7 @@ impl<'a> Parser<'a> {
     fn emit_loop(&mut self, loop_start: usize) {
         self.emit_byte(op::LOOP);
 
-        let offset = (self.current_chunk.as_ref().unwrap().code.len() - loop_start + 2) as u16;
+        let offset = (self.current_chunk().code.len() - loop_start + 2) as u16;
 
         if offset > u16::MAX {
             self.error("Loop body too large.");
@@ -787,7 +817,7 @@ impl<'a> Parser<'a> {
             self.expression_statement();
         }
 
-        let mut loop_start = self.current_chunk.as_ref().unwrap().code.len();
+        let mut loop_start = self.current_chunk().code.len();
 
         let mut exit_jump: Option<usize> = None;
 
@@ -804,7 +834,7 @@ impl<'a> Parser<'a> {
         if !self.match_token(TokenType::RightParen) {
             let body_jump = self.emit_jump(op::JUMP);
 
-            let increment_start = self.current_chunk.as_ref().unwrap().code.len();
+            let increment_start = self.current_chunk().code.len();
 
             self.expression();
 
@@ -829,6 +859,61 @@ impl<'a> Parser<'a> {
         }
 
         self.end_scope();
+    }
+
+    fn fun_declaration(&mut self) {
+        let global = self.parse_variable("Expect function name.");
+
+        self.mark_initialized();
+
+        self.function(FunctionType::Function);
+
+        self.define_variable(global);
+    }
+
+    fn function(&mut self, function: FunctionType) {
+        let mut compiler = Compiler::new(function);
+        compiler.function.unwrap().name = Some(StringObject::new(
+            self.previous.lexme,
+            &mut self.table,
+            self.objects,
+        ));
+
+        let mut compiler = Some(compiler);
+
+        std::mem::swap(&mut compiler, &mut self.compiler);
+
+        self.begin_scope();
+
+        self.consume(TokenType::LeftParen, "Expected '(' after function name.");
+
+        while !self.match_token(TokenType::RightParen) {
+            {
+                let mut function = self.compiler.as_mut().unwrap().function.as_mut().unwrap();
+
+                function.arity += 1;
+
+                if function.arity > 255 {
+                    self.error_at_current("Can't have more than 255 parameters.")
+                }
+            }
+
+            let param = self.parse_variable("Expect parameter name.");
+
+            self.define_variable(param);
+        }
+
+        self.consume(TokenType::LeftBrace, "Expected '{' after function body.");
+
+        self.block();
+
+        let function = self.end_compiler();
+
+        std::mem::swap(&mut compiler, &mut self.compiler);
+
+        let constant = self.make_constant(Value::object(function.unwrap().to_raw()));
+
+        self.emit_bytes(op::CONSTANT, constant)
     }
 }
 

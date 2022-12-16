@@ -2,7 +2,7 @@ use std::fmt::Debug;
 
 use crate::{
     object::{ObjectType, StringObject},
-    RawObject,
+    FunctionObject, RawObject,
 };
 
 #[derive(Clone, Copy)]
@@ -24,7 +24,8 @@ impl Debug for Value {
 
                     ValueType::Number => self.as_number_ref() as &dyn Debug,
                     ValueType::Object => match self.obj_type() {
-                        ObjectType::String => self.as_string(),
+                        ObjectType::String => self.as_string() as &dyn Debug,
+                        ObjectType::Function => self.as_function() as &dyn Debug,
                     },
                 },
             )
@@ -144,6 +145,12 @@ impl Value {
     }
 
     #[inline]
+    pub fn as_function<'a>(&self) -> &FunctionObject<'a> {
+        let ptr = self.as_obj();
+        unsafe { &*(ptr as *const FunctionObject<'a>) }
+    }
+
+    #[inline]
     pub fn as_raw_string<'a>(&self) -> &'a str {
         let ptr = self.as_obj();
         unsafe {
@@ -169,6 +176,11 @@ impl Value {
     #[inline]
     pub fn is_obj(&self) -> bool {
         self.ty == ValueType::Object
+    }
+
+    #[inline]
+    pub fn is_function(&self) -> bool {
+        self.is_obj_type(ObjectType::Function)
     }
 
     #[inline]

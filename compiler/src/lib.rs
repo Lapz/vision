@@ -1,14 +1,14 @@
+mod compiler;
 mod parser;
 mod scanner;
 mod token;
-mod local;
 
 use scanner::Scanner;
-use vm::{chunk::Chunk, RawObject, Table};
+use vm::{FunctionObject, RawObject, Table};
 
 use crate::token::TokenType;
 
-pub fn compile(input: &str) -> Option<(Chunk, Table, RawObject)> {
+pub fn compile(input: &str) -> Option<(Option<FunctionObject>, Table, RawObject)> {
     let scanner = Scanner::new(input);
     let mut parser = parser::Parser::new(scanner);
 

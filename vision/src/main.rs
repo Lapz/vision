@@ -1,9 +1,9 @@
 use compiler::compile;
-use std::env;
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
-use vm::VM;
+use std::{env, error::Error};
+use vm::{Value, VM};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = env::args().collect::<Vec<String>>();
@@ -23,11 +23,30 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn interpret(src: &str) -> Result<(), Box<dyn std::error::Error>> {
-    let (chunk, table, object_list) = compile(src).ok_or("Compile error")?;
+    let (function, table, object_list) = compile(src).ok_or("Compile error")?;
 
-    let mut vm = VM::new(chunk, table, object_list);
+    match function {
+        Some(function) => {
+            let mut vm = VM::new(table, object_list);
 
-    vm.interpret()
+            vm.push(Value::object(function.to_raw()));
+
+            let index = vm.frame_count;
+
+            vm.frame_count += 1;
+
+            let frame = vm.frames.get_mut(index).unwrap();
+
+            frame.function = function;
+
+            frame.ip = 0;
+
+            frame.slots = vm.stack_top;
+
+            vm.run()
+        }
+        None => Err("Compile error".into()),
+    }
 }
 
 fn repl() -> Result<(), Box<dyn std::error::Error>> {

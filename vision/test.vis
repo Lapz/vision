@@ -4,16 +4,8 @@ breakfast = "beignets avec " + beverage;
 print breakfast;
 
 
-{
-    var a = "outer";
-    print a;
-    {
-        var a = "inner";
-        print a;
-    }
-    print a;
+fun a() {
+
 }
 
-for(var i = 2; i < 1000; i = i * 2) {
-    print i*4;
-}
+print a;

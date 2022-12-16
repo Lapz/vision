@@ -1,17 +1,19 @@
 use crate::{
     chunk::Chunk,
+    frame::CallFrame,
     op,
     value::{Value, ValueType},
-    ObjectType, RawObject, StringObject, Table,
+    FunctionObject, ObjectType, RawObject, StringObject, Table,
 };
 use std::fmt;
-pub const STACK_MAX: usize = 256;
+pub const STACK_MAX: usize = FRAMES_MAX * (u8::BITS as usize);
+pub const FRAMES_MAX: usize = 64;
 
-pub struct VM {
-    chunk: Chunk,
+pub struct VM<'a> {
     stack: [Value; STACK_MAX],
-    stack_top: usize,
-    ip: usize,
+    pub frames: Vec<CallFrame<'a>>,
+    pub stack_top: usize,
+    pub frame_count: usize,
     objects: RawObject,
     strings: Table,
     globals: Table,
@@ -34,28 +36,51 @@ impl fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
+macro_rules! frame {
+    ($vm:ident) => {{
+        let frame = $vm.frames.get($vm.frame_count - 1).expect("No frame found");
+        frame
+    }};
+}
+
+macro_rules! frame_mut {
+    ($vm:ident) => {{
+        let frame = $vm
+            .frames
+            .get_mut($vm.frame_count - 1)
+            .expect("No frame found");
+        frame
+    }};
+}
+
 macro_rules! read_byte {
     ($vm:ident) => {{
-        let temp = $vm.ip;
-        $vm.ip += 1;
+        let frame = frame_mut!($vm);
+        let temp = frame.ip;
+        frame.ip += 1;
 
-        $vm.chunk[temp]
+        frame.function.chunk[temp]
     }};
 }
 
 macro_rules! read_short {
     ($vm:ident) => {{
-        $vm.ip += 2;
+        let frame = frame_mut!($vm);
 
-        let temp = $vm.ip;
+        frame.ip += 2;
 
-        ($vm.chunk[temp - 2] as u16) << 8 | $vm.chunk[temp - 1] as u16
+        let temp = frame.ip;
+
+        (frame.function.chunk[temp - 2] as u16) << 8 | frame.function.chunk[temp - 1] as u16
     }};
 }
 
 macro_rules! read_constant {
     ($vm:ident) => {{
-        $vm.chunk.constants[read_byte!($vm) as usize]
+        let byte = read_byte!($vm) as usize;
+        let frame = frame!($vm);
+
+        frame.function.chunk.constants[byte]
     }};
 }
 
@@ -84,9 +109,13 @@ macro_rules! runtime_error {
     ($self:ident,$($arg:tt)*) => {{
         eprint!($($arg)*);
 
-        let instruction = $self.ip - $self.chunk.code[$self.ip - 1] as usize;
 
-        let line = $self.chunk.lines[instruction];
+        let frame = frame!($self);
+
+
+        let instruction = frame.ip - frame.function.chunk.code[frame.ip - 1] as usize;
+
+        let line = frame.function.chunk.lines[instruction];
 
 
         eprintln!(" [line {}] in script", line);
@@ -98,37 +127,54 @@ macro_rules! runtime_error {
     }};
 }
 
-impl VM {
-    pub fn new(chunk: Chunk, strings: Table, objects: RawObject) -> Self {
+impl<'a> VM<'a> {
+    pub fn new(strings: Table, objects: RawObject) -> Self {
+        let mut frames = Vec::new();
+
+        for _ in 0..FRAMES_MAX {
+            frames.push(CallFrame::new())
+        }
+
         Self {
-            chunk,
             stack: [Value::nil(); STACK_MAX],
+            frames,
             stack_top: 0,
-            ip: 0,
+            frame_count: 0,
+
             objects,
             strings,
             globals: Table::new(),
         }
     }
 
-    pub fn interpret(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        return self.run();
-    }
-
     pub fn run(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         loop {
             let instruction = read_byte!(self);
 
-            #[cfg(feature = "trace")]
             {
-                print!("          ");
-                for slot in 0..self.stack_top {
-                    print!("[ ");
-                    print_value(self.stack[slot]);
-                    print!(" ]");
+                #[cfg(feature = "trace")]
+                {
+                    print!("          ");
+                    for slot in 0..self.stack_top {
+                        print!("[ ");
+                        print_value(self.stack[slot]);
+                        print!(" ]");
+                    }
+                    println!();
                 }
-                println!();
-                self.chunk.disassemble_instruction(self.ip - 1);
+
+                #[cfg(feature = "debug")]
+                {
+                    let frame = frame!(self);
+
+                    frame
+                        .function
+                        .chunk
+                        .disassemble(match frame.function.name.as_ref() {
+                            Some(name) => name.chars,
+                            None => "<script>",
+                        });
+                }
             }
 
             match instruction {
@@ -235,8 +281,8 @@ impl VM {
 
                 op::GET_LOCAL => {
                     let slot = read_byte!(self);
-
-                    self.push(self.stack[slot as usize])
+                    let index = frame!(self).slots + slot as usize;
+                    self.push(self.stack[index])
                 }
 
                 op::SET_LOCAL => {
@@ -244,26 +290,29 @@ impl VM {
 
                     let val = self.peek(0);
 
-                    self.stack[slot as usize] = val;
+                    let index = frame!(self).slots + slot as usize;
+
+                    self.stack[index] = val;
                 }
                 op::JUMP_IF_FALSE => {
                     let offset = read_short!(self) as usize;
 
-                    if self.peek(0).is_falsey() {
-                        self.ip += offset;
+                    let if_false = self.peek(0).is_falsey();
+                    if if_false {
+                        frame_mut!(self).ip += offset;
                     }
                 }
 
                 op::JUMP => {
                     let offset = read_short!(self) as usize;
 
-                    self.ip += offset;
+                    frame_mut!(self).ip += offset;
                 }
 
                 op::LOOP => {
                     let offset = read_short!(self) as usize;
 
-                    self.ip -= offset;
+                    frame_mut!(self).ip -= offset;
                 }
 
                 _ => {
@@ -275,7 +324,7 @@ impl VM {
         }
     }
 
-    fn push(&mut self, val: Value) {
+    pub fn push(&mut self, val: Value) {
         self.stack[self.stack_top] = val;
         self.stack_top += 1;
     }
@@ -328,19 +377,34 @@ pub fn print_value(value: Value) {
 pub fn print_object(value: Value) {
     match value.obj_type() {
         ObjectType::String => print!("{}", value.as_raw_string()),
+        ObjectType::Function => print_function(value.as_function()),
     }
 }
 
-fn free_object(obj: RawObject) {
-    let obj_obj = unsafe { &*(obj) };
+fn print_function(function: &FunctionObject) {
+    match &function.name {
+        Some(name) => {
+            print!("<fn {}>", name.chars)
+        }
+        None => {
+            print!("<script>")
+        }
+    }
+}
+
+unsafe fn free_object(obj: RawObject) {
+    let obj_obj = &*(obj);
     match obj_obj.ty {
-        ObjectType::String => unsafe {
+        ObjectType::String => {
             let _ = Box::from_raw(obj);
-        },
+        }
+        ObjectType::Function => {
+            let _ = Box::from_raw(obj);
+        }
     }
 }
 
-impl Drop for VM {
+impl<'a> Drop for VM<'a> {
     fn drop(&mut self) {
         let mut obj = self.objects;
 

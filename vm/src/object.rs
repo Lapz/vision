@@ -1,4 +1,6 @@
-use crate::{Table, Value};
+use std::fmt::Debug;
+
+use crate::{chunk::Chunk, Table, Value};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[repr(C)]
@@ -16,10 +18,27 @@ pub struct StringObject<'a> {
     pub hash: usize,
 }
 
+pub struct FunctionObject<'a> {
+    _obj: Object,
+    pub arity: usize,
+    pub chunk: Chunk,
+    pub name: Option<StringObject<'a>>,
+}
+
+impl<'a> Debug for FunctionObject<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FunctionObject")
+            .field("_obj", &self._obj)
+            .field("arity", &self.arity)
+            .field("name", &self.name)
+            .finish()
+    }
+}
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 
 pub enum ObjectType {
     String,
+    Function,
 }
 
 impl Object {
@@ -92,7 +111,30 @@ impl<'a> StringObject<'a> {
         Box::into_raw(Box::new(s)) as RawObject
     }
 
+    pub fn to_raw(&self) -> RawObject {
+        let ptr: *const StringObject = self;
+
+        ptr as RawObject
+    }
+
     pub fn value(&self) -> &str {
         self.chars
+    }
+}
+
+impl<'a> FunctionObject<'a> {
+    pub fn new(name: Option<StringObject<'a>>, next: RawObject) -> Self {
+        Self {
+            _obj: Object::new(ObjectType::Function, next),
+            arity: 0,
+            chunk: Chunk::new(),
+            name,
+        }
+    }
+
+    pub fn to_raw(&self) -> RawObject {
+        let ptr: *const FunctionObject = self;
+
+        ptr as RawObject
     }
 }
