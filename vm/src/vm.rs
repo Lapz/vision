@@ -415,7 +415,7 @@ impl<'a> VM<'a> {
         }
 
         frame.function = callee;
-        frame.slots = self.stack_top - arg_count as usize - 1;
+        frame.slots = self.stack_top - arg_count as usize;
 
         true
     }
