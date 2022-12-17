@@ -1,5 +1,6 @@
 pub mod chunk;
 mod frame;
+mod native;
 mod object;
 pub mod op;
 mod table;

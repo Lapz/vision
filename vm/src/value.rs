@@ -2,7 +2,7 @@ use std::fmt::Debug;
 
 use crate::{
     object::{ObjectType, StringObject},
-    FunctionObject, ObjectPtr, RawObject,
+    FunctionObject, NativeObject, ObjectPtr, RawObject,
 };
 
 #[derive(Clone, Copy)]
@@ -26,6 +26,7 @@ impl Debug for Value {
                     ValueType::Object => match self.obj_type() {
                         ObjectType::String => self.as_string() as &dyn Debug,
                         ObjectType::Function => &"<fn> " as &dyn Debug,
+                        ObjectType::Native => &"<native>" as &dyn Debug,
                     },
                 },
             )
@@ -150,6 +151,11 @@ impl Value {
     }
 
     #[inline]
+    pub fn as_native(&self) -> ObjectPtr<NativeObject> {
+        unsafe { self.repr.object.as_native_function() }
+    }
+
+    #[inline]
     pub fn as_raw_string<'a>(&self) -> &'a str {
         let ptr = self.as_obj();
         unsafe {
@@ -180,6 +186,11 @@ impl Value {
     #[inline]
     pub fn is_function(&self) -> bool {
         self.is_obj_type(ObjectType::Function)
+    }
+
+    #[inline]
+    pub fn is_native(&self) -> bool {
+        self.is_obj_type(ObjectType::Native)
     }
 
     #[inline]

@@ -1,10 +1,11 @@
 use crate::{
     frame::CallFrame,
+    native::clock_native,
     op,
     value::{Value, ValueType},
-    FunctionObject, ObjectPtr, ObjectType, RawObject, StringObject, Table,
+    FunctionObject, NativeFn, NativeObject, ObjectPtr, ObjectType, RawObject, StringObject, Table,
 };
-use std::fmt;
+use std::{fmt, result};
 pub const STACK_MAX: usize = FRAMES_MAX * (u8::BITS as usize);
 pub const FRAMES_MAX: usize = 64;
 
@@ -91,8 +92,10 @@ macro_rules! read_constant {
 
 macro_rules! binary_op {
     ($val_ty:ident,$op:tt,$self:ident) => {{
+
+        println!("{:?} {:?}",$self.peek(0),$self.peek(1));
         if !$self.peek(0).is_number() || !$self.peek(1).is_number() {
-            runtime_error!($self, "Operands must be numbers.");
+            runtime_error!($self, "{} operands must be numbers",stringify!($op));
             return Err(Box::new(Error::RuntimeError));
         }
 
@@ -140,16 +143,19 @@ impl<'a> VM<'a> {
             frames.push(CallFrame::new())
         }
 
-        Self {
+        let mut vm = Self {
             stack: [Value::nil(); STACK_MAX],
             frames,
             stack_top: 0,
             frame_count: 0,
-
             objects,
             strings,
             globals: Table::new(),
-        }
+        };
+
+        vm.define_native("clock", clock_native);
+
+        vm
     }
 
     pub fn run(&mut self) -> Result<(), Box<dyn std::error::Error>> {
@@ -182,7 +188,7 @@ impl<'a> VM<'a> {
 
                     self.frame_count -= 1;
 
-                    if self.frame_count == 1 {
+                    if self.frame_count == 0 {
                         self.pop();
                         return Ok(());
                     }
@@ -330,9 +336,9 @@ impl<'a> VM<'a> {
                 op::CALL => {
                     let arg_count = read_byte!(self);
 
-                    let callee = self.peek(0);
+                    let callee = self.peek(arg_count as usize);
 
-                    if !self.call_value(callee, arg_count) {
+                    if !self.call_value(callee, arg_count as usize) {
                         return Err(Box::new(Error::RuntimeError));
                     }
                 }
@@ -359,8 +365,21 @@ impl<'a> VM<'a> {
     fn reset_stack(&mut self) {
         self.stack_top = 0;
     }
+
     fn peek(&self, distance: usize) -> Value {
         self.stack[self.stack_top - 1 - distance as usize]
+    }
+
+    fn define_native(&mut self, name: &str, fn_ptr: NativeFn) {
+        let name = Value::object(StringObject::new(name, &mut self.strings, self.objects).into());
+        self.push(name);
+
+        self.push(Value::object(NativeObject::new(fn_ptr).into()));
+
+        self.globals.set(name.as_obj(), self.stack[1]);
+
+        self.pop();
+        self.pop();
     }
 
     fn concatenate(&mut self) {
@@ -382,18 +401,33 @@ impl<'a> VM<'a> {
         self.push(result);
     }
 
-    fn call_value(&mut self, callee: Value, arg_count: u8) -> bool {
+    fn call_value(&mut self, callee: Value, arg_count: usize) -> bool {
         if callee.is_obj() {
             match callee.obj_type() {
                 ObjectType::String => {}
                 ObjectType::Function => return self.call(callee.as_function(), arg_count),
+                ObjectType::Native => {
+                    let native = callee.as_native();
+
+                    let result = (native.function)(
+                        arg_count as usize,
+                        self.stack[self.stack_top - arg_count..self.stack_top].as_ptr(),
+                    );
+
+                    self.stack_top -= arg_count + 1;
+
+                    self.push(result);
+
+                    return true;
+                }
             }
         }
+
         runtime_error!(self, "Can only call functions and classes.");
         false
     }
 
-    pub fn call(&mut self, callee: ObjectPtr<FunctionObject<'a>>, arg_count: u8) -> bool {
+    pub fn call(&mut self, callee: ObjectPtr<FunctionObject<'a>>, arg_count: usize) -> bool {
         if self.frame_count == FRAMES_MAX {
             runtime_error!(self, "Stack overflow.");
             return false;
@@ -403,7 +437,7 @@ impl<'a> VM<'a> {
 
         let frame = frame_mut!(self);
 
-        if arg_count as usize != callee.arity {
+        if arg_count != callee.arity {
             runtime_error!(
                 self,
                 "Expected {} arguments but got {}",
@@ -415,7 +449,7 @@ impl<'a> VM<'a> {
         }
 
         frame.function = callee;
-        frame.slots = self.stack_top - arg_count as usize;
+        frame.slots = self.stack_top - arg_count - 1 as usize;
 
         true
     }
@@ -435,6 +469,7 @@ pub fn print_object(value: Value) {
     match value.obj_type() {
         ObjectType::String => print!("{}", value.as_raw_string()),
         ObjectType::Function => print_function(&value.as_function()),
+        ObjectType::Native => print!("<native fn>"),
     }
 }
 
@@ -452,10 +487,7 @@ fn print_function(function: &FunctionObject) {
 unsafe fn free_object(obj: RawObject) {
     let obj_obj = &*(obj);
     match obj_obj.ty {
-        ObjectType::String => {
-            let _ = Box::from_raw(obj);
-        }
-        ObjectType::Function => {
+        _ => {
             let _ = Box::from_raw(obj);
         }
     }

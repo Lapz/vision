@@ -10,7 +10,7 @@ pub struct CallFrame<'a> {
 impl<'a> CallFrame<'a> {
     pub fn new() -> Self {
         Self {
-            function: FunctionObject::new_ptr(None, std::ptr::null::<RawObject>() as RawObject),
+            function: FunctionObject::new(None, std::ptr::null::<RawObject>() as RawObject),
             ip: 0,
             slots: 0,
         }

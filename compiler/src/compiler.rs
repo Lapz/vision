@@ -40,7 +40,7 @@ impl<'a> Compiler<'a> {
             locals: [Local::default(); 257],
             local_count: 1,
             scope_depth: 0,
-            function: FunctionObject::new_ptr(None, next),
+            function: FunctionObject::new(None, next),
             compiler_type,
         }
     }

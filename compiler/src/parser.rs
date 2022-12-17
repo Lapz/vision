@@ -292,9 +292,17 @@ impl<'a> Parser<'a> {
     }
 
     pub fn end_compiler(&mut self) -> ObjectPtr<FunctionObject<'a>> {
-        self.emit_return();
+        // self.emit_return();
 
         let function = self.compiler.take().unwrap().function;
+
+        #[cfg(feature = "debug")]
+        {
+            function.chunk.disassemble(match function.name {
+                Some(name) => name.chars,
+                None => "<script>",
+            });
+        }
 
         function
     }

@@ -5,6 +5,8 @@ use std::{
 
 use crate::{chunk::Chunk, Table, Value};
 
+pub type NativeFn = fn(usize, *const Value) -> Value;
+pub type RawObject = *mut Object;
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[repr(C)]
 pub struct Object {
@@ -17,96 +19,6 @@ pub struct ObjectPtr<T: ?Sized + Debug> {
     ptr: RawObject,
     tag: std::marker::PhantomData<T>,
 }
-
-impl<T: ?Sized + Debug> ObjectPtr<T> {
-    pub fn new(ptr: RawObject) -> ObjectPtr<T> {
-        Self {
-            ptr,
-            tag: std::marker::PhantomData,
-        }
-    }
-
-    pub fn null() -> ObjectPtr<T> {
-        Self {
-            ptr: std::ptr::null::<RawObject>() as RawObject,
-            tag: std::marker::PhantomData,
-        }
-    }
-
-    pub fn as_ptr(&self) -> RawObject {
-        self.ptr
-    }
-
-    pub fn as_ptr_obj(&self) -> ObjectPtr<RawObject> {
-        ObjectPtr::new(self.ptr)
-    }
-
-    pub fn as_function<'a>(&self) -> ObjectPtr<FunctionObject<'a>> {
-        ObjectPtr::new(self.ptr)
-    }
-
-    pub fn take<'a, V: Sized>(self) -> &'a V {
-        unsafe { &*(self.ptr as *const V) }
-    }
-
-    pub fn is_null(&self) -> bool {
-        self.ptr.is_null()
-    }
-}
-
-impl<T: Debug> Deref for ObjectPtr<T> {
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
-        unsafe { &*(self.ptr as *const T) }
-    }
-}
-
-impl<'a> DerefMut for ObjectPtr<FunctionObject<'a>> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        unsafe { &mut *(self.ptr as *mut FunctionObject) }
-    }
-}
-
-impl<'a> AsRef<StringObject<'a>> for ObjectPtr<StringObject<'a>> {
-    fn as_ref(&self) -> &StringObject<'a> {
-        unsafe { &*(self.ptr as *const StringObject<'a>) }
-    }
-}
-
-impl<'a> AsRef<FunctionObject<'a>> for ObjectPtr<StringObject<'a>> {
-    fn as_ref(&self) -> &FunctionObject<'a> {
-        unsafe { &*(self.ptr as *const FunctionObject<'a>) }
-    }
-}
-
-// impl<'a> Into<ObjectPtr<RawObject>> for ObjectPtr<FunctionObject<'a>> {
-//     fn into(self) -> ObjectPtr<RawObject> {
-//         ObjectPtr::new(self.ptr)
-//     }
-// }
-
-impl<'a> Into<ObjectPtr<RawObject>> for ObjectPtr<StringObject<'a>> {
-    fn into(self) -> ObjectPtr<RawObject> {
-        ObjectPtr::new(self.ptr)
-    }
-}
-
-impl<'a> Into<ObjectPtr<RawObject>> for ObjectPtr<FunctionObject<'a>> {
-    fn into(self) -> ObjectPtr<RawObject> {
-        ObjectPtr::new(self.ptr)
-    }
-}
-
-// trait ObjectPtr {
-//     type DownCast;
-
-//     fn as_obj(&self) -> RawObject;
-
-//     fn downcast(&self) -> Self::DownCast;
-// }
-
-pub type RawObject = *mut Object;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 
@@ -124,20 +36,19 @@ pub struct FunctionObject<'a> {
     pub name: Option<ObjectPtr<StringObject<'a>>>,
 }
 
-impl<'a> Debug for FunctionObject<'a> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("FunctionObject")
-            .field("_obj", &self._obj)
-            .field("arity", &self.arity)
-            .field("name", &self.name)
-            .finish()
-    }
+#[derive(Debug, Clone, PartialEq)]
+#[repr(C)]
+pub struct NativeObject {
+    pub obj: Object,
+    pub function: NativeFn,
 }
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 
 pub enum ObjectType {
     String,
     Function,
+    Native,
 }
 
 impl Object {
@@ -226,23 +137,7 @@ impl<'a> StringObject<'a> {
 }
 
 impl<'a> FunctionObject<'a> {
-    pub fn new(name: Option<StringObject<'a>>, next: RawObject) -> Self {
-        todo!()
-        // Self {
-        //     _obj: Object::new(ObjectType::Function, next),
-        //     arity: 0,
-        //     chunk: Chunk::new(),
-        //     name,
-        // }
-    }
-
-    pub fn to_raw(&self) -> RawObject {
-        let ptr: *const FunctionObject = self;
-
-        ptr as RawObject
-    }
-
-    pub fn new_ptr(
+    pub fn new(
         name: Option<ObjectPtr<StringObject<'a>>>,
         next: RawObject,
     ) -> ObjectPtr<FunctionObject<'a>> {
@@ -252,5 +147,114 @@ impl<'a> FunctionObject<'a> {
             chunk: Chunk::new(),
             name,
         })) as RawObject)
+    }
+}
+
+impl NativeObject {
+    pub fn new(function: NativeFn) -> ObjectPtr<NativeObject> {
+        ObjectPtr::new(Box::into_raw(Box::new(NativeObject {
+            obj: Object::new(
+                ObjectType::Native,
+                std::ptr::null::<RawObject>() as RawObject,
+            ),
+            function,
+        })) as RawObject)
+    }
+}
+impl<T: ?Sized + Debug> ObjectPtr<T> {
+    pub fn new(ptr: RawObject) -> ObjectPtr<T> {
+        Self {
+            ptr,
+            tag: std::marker::PhantomData,
+        }
+    }
+
+    pub fn null() -> ObjectPtr<T> {
+        Self {
+            ptr: std::ptr::null::<RawObject>() as RawObject,
+            tag: std::marker::PhantomData,
+        }
+    }
+
+    pub fn as_ptr(&self) -> RawObject {
+        self.ptr
+    }
+
+    pub fn as_ptr_obj(&self) -> ObjectPtr<RawObject> {
+        ObjectPtr::new(self.ptr)
+    }
+
+    pub fn as_function<'a>(&self) -> ObjectPtr<FunctionObject<'a>> {
+        ObjectPtr::new(self.ptr)
+    }
+
+    pub fn as_native_function(&self) -> ObjectPtr<NativeObject> {
+        ObjectPtr::new(self.ptr)
+    }
+
+    pub fn as_native(&self) -> ObjectPtr<NativeObject> {
+        ObjectPtr::new(self.ptr)
+    }
+
+    pub fn take<'a, V: Sized>(self) -> &'a V {
+        unsafe { &*(self.ptr as *const V) }
+    }
+
+    pub fn is_null(&self) -> bool {
+        self.ptr.is_null()
+    }
+}
+
+impl<T: Debug> Deref for ObjectPtr<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*(self.ptr as *const T) }
+    }
+}
+
+impl<'a> DerefMut for ObjectPtr<FunctionObject<'a>> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        unsafe { &mut *(self.ptr as *mut FunctionObject) }
+    }
+}
+
+impl<'a> AsRef<StringObject<'a>> for ObjectPtr<StringObject<'a>> {
+    fn as_ref(&self) -> &StringObject<'a> {
+        unsafe { &*(self.ptr as *const StringObject<'a>) }
+    }
+}
+
+impl<'a> AsRef<FunctionObject<'a>> for ObjectPtr<StringObject<'a>> {
+    fn as_ref(&self) -> &FunctionObject<'a> {
+        unsafe { &*(self.ptr as *const FunctionObject<'a>) }
+    }
+}
+
+impl<'a> Into<ObjectPtr<RawObject>> for ObjectPtr<StringObject<'a>> {
+    fn into(self) -> ObjectPtr<RawObject> {
+        ObjectPtr::new(self.ptr)
+    }
+}
+
+impl<'a> Into<ObjectPtr<RawObject>> for ObjectPtr<FunctionObject<'a>> {
+    fn into(self) -> ObjectPtr<RawObject> {
+        ObjectPtr::new(self.ptr)
+    }
+}
+
+impl<'a> Into<ObjectPtr<RawObject>> for ObjectPtr<NativeObject> {
+    fn into(self) -> ObjectPtr<RawObject> {
+        ObjectPtr::new(self.ptr)
+    }
+}
+
+impl<'a> Debug for FunctionObject<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FunctionObject")
+            .field("_obj", &self._obj)
+            .field("arity", &self.arity)
+            .field("name", &self.name)
+            .finish()
     }
 }
