@@ -311,20 +311,19 @@ impl<'a> Parser<'a> {
     pub fn end(mut self) -> (ObjectPtr<FunctionObject<'a>>, Table, RawObject) {
         self.emit_return();
 
-        let function = self.compiler.take().unwrap().function;
-
         #[cfg(feature = "debug")]
         {
             if !self.had_error {
-                self.current_chunk
-                    .as_ref()
-                    .unwrap()
-                    .disassemble(match function.name {
+                self.current_chunk().disassemble(
+                    match self.compiler.as_ref().unwrap().function.name {
                         Some(name) => name.chars,
                         None => "<script>",
-                    });
+                    },
+                );
             }
         }
+
+        let function = self.compiler.take().unwrap().function;
 
         (function, self.table, self.objects)
     }

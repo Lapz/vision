@@ -60,6 +60,7 @@ macro_rules! frame_mut {
 macro_rules! read_byte {
     ($vm:ident) => {{
         let frame = frame_mut!($vm);
+
         let temp = frame.ip;
         frame.ip += 1;
 
@@ -171,13 +172,7 @@ impl<'a> VM<'a> {
                 {
                     let frame = frame!(self);
 
-                    frame
-                        .function
-                        .chunk
-                        .disassemble(match frame.function.name.as_ref() {
-                            Some(name) => name.chars,
-                            None => "<script>",
-                        });
+                    frame.function.chunk.disassemble_instruction(frame.ip - 1);
                 }
             }
 
@@ -187,7 +182,7 @@ impl<'a> VM<'a> {
 
                     self.frame_count -= 1;
 
-                    if self.frame_count == 0 {
+                    if self.frame_count == 1 {
                         self.pop();
                         return Ok(());
                     }
@@ -401,7 +396,6 @@ impl<'a> VM<'a> {
     pub fn call(&mut self, callee: ObjectPtr<FunctionObject<'a>>, arg_count: u8) -> bool {
         if self.frame_count == FRAMES_MAX {
             runtime_error!(self, "Stack overflow.");
-
             return false;
         }
 

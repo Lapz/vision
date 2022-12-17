@@ -28,9 +28,9 @@ fn interpret(src: &str) -> Result<(), Box<dyn std::error::Error>> {
     } else {
         let mut vm = VM::new(table, object_list);
 
-        vm.push(Value::object(function.as_ptr_obj()));
+        let function_ptr = function.as_function();
 
-        vm.call(function.as_function(), 0);
+        vm.push(Value::object(function.as_ptr_obj()));
 
         let index = vm.frame_count;
 
@@ -43,6 +43,8 @@ fn interpret(src: &str) -> Result<(), Box<dyn std::error::Error>> {
         frame.ip = 0;
 
         frame.slots = vm.stack_top;
+
+        vm.call(function_ptr, 0);
 
         vm.run()
     }
