@@ -1,4 +1,4 @@
-use vm::{FunctionObject, RawObject, StringObject};
+use vm::{FunctionObject, ObjectPtr, RawObject, StringObject};
 
 use crate::token::{Token, TokenType};
 #[derive(Clone, Copy)]
@@ -6,7 +6,7 @@ pub struct Local<'a> {
     pub name: Token<'a>,
     pub depth: isize,
 }
-
+#[derive(PartialEq, Eq)]
 pub enum FunctionType {
     Function,
     Script,
@@ -27,7 +27,7 @@ impl<'a> Default for Local<'a> {
 }
 
 pub struct Compiler<'a> {
-    pub function: Option<FunctionObject<'a>>,
+    pub function: ObjectPtr<FunctionObject<'a>>,
     pub compiler_type: FunctionType,
     pub locals: [Local<'a>; 257],
     pub local_count: usize,
@@ -35,15 +35,12 @@ pub struct Compiler<'a> {
 }
 
 impl<'a> Compiler<'a> {
-    pub fn new(compiler_type: FunctionType) -> Self {
+    pub fn new(compiler_type: FunctionType, next: RawObject) -> Self {
         Self {
             locals: [Local::default(); 257],
             local_count: 1,
             scope_depth: 0,
-            function: Some(FunctionObject::new(
-                None,
-                std::ptr::null::<RawObject>() as RawObject,
-            )),
+            function: FunctionObject::new_ptr(None, next),
             compiler_type,
         }
     }

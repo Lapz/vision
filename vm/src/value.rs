@@ -2,7 +2,7 @@ use std::fmt::Debug;
 
 use crate::{
     object::{ObjectType, StringObject},
-    FunctionObject, RawObject,
+    FunctionObject, ObjectPtr, RawObject,
 };
 
 #[derive(Clone, Copy)]
@@ -25,7 +25,7 @@ impl Debug for Value {
                     ValueType::Number => self.as_number_ref() as &dyn Debug,
                     ValueType::Object => match self.obj_type() {
                         ObjectType::String => self.as_string() as &dyn Debug,
-                        ObjectType::Function => self.as_function() as &dyn Debug,
+                        ObjectType::Function => &"<fn> " as &dyn Debug,
                     },
                 },
             )
@@ -38,7 +38,7 @@ impl Debug for Value {
 pub union As {
     boolean: bool,
     number: f64,
-    object: RawObject,
+    object: ObjectPtr<RawObject>,
 }
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub enum ValueType {
@@ -72,7 +72,7 @@ impl Value {
     }
 
     #[inline]
-    pub fn object(object: RawObject) -> Value {
+    pub fn object(object: ObjectPtr<RawObject>) -> Value {
         Value {
             repr: As { object },
             ty: ValueType::Object,
@@ -135,7 +135,7 @@ impl Value {
             self.ty,
             ValueType::Object
         );
-        unsafe { self.repr.object }
+        unsafe { self.repr.object.as_ptr() }
     }
 
     #[inline]
@@ -145,9 +145,8 @@ impl Value {
     }
 
     #[inline]
-    pub fn as_function<'a>(&self) -> &FunctionObject<'a> {
-        let ptr = self.as_obj();
-        unsafe { &*(ptr as *const FunctionObject<'a>) }
+    pub fn as_function<'a>(&self) -> ObjectPtr<FunctionObject<'a>> {
+        unsafe { self.repr.object.as_function() }
     }
 
     #[inline]
@@ -213,11 +212,7 @@ impl PartialEq for Value {
             ValueType::Bool => self.as_bool() == other.as_bool(),
             ValueType::Nil => true,
             ValueType::Number => self.as_number() == other.as_number(),
-            ValueType::Object => {
-                println!("{:#?} vs {:#?}", self.as_obj(), other.as_obj());
-
-                self.as_obj() == other.as_obj()
-            }
+            ValueType::Object => self.as_obj() == other.as_obj(),
         }
     }
 }

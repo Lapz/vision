@@ -5,7 +5,7 @@ use crate::{
     scanner::Scanner,
     token::{Token, TokenType},
 };
-use vm::{chunk::Chunk, FunctionObject, RawObject, Table, Value};
+use vm::{chunk::Chunk, FunctionObject, ObjectPtr, RawObject, Table, Value};
 use vm::{op, StringObject};
 
 pub struct Parser<'a> {
@@ -71,6 +71,7 @@ macro_rules! hashmap {
 
 impl<'a> Parser<'a> {
     pub fn new(scanner: Scanner<'a>) -> Parser<'a> {
+        let objects = std::ptr::null::<RawObject>() as RawObject;
         Parser {
             scanner,
             previous: Token {
@@ -90,8 +91,8 @@ impl<'a> Parser<'a> {
             rules: hashmap! {
                     TokenType::LeftParen => ParseRule {
                         prefix: Some(Parser::grouping),
-                        infix: None,
-                        precedence: Precedence::None,
+                        infix: Some(Parser::call),
+                        precedence: Precedence::Call,
                     },
                     TokenType::RightParen => ParseRule::default(),
                     TokenType::LeftBrace => ParseRule::default(),
@@ -214,9 +215,9 @@ impl<'a> Parser<'a> {
                     TokenType::Error => ParseRule::default(),
                     TokenType::Eof => ParseRule::default(),
             },
-            objects: std::ptr::null::<RawObject>() as RawObject,
+            objects,
             table: Table::new(),
-            compiler: Some(Compiler::new(FunctionType::Script)),
+            compiler: Some(Compiler::new(FunctionType::Script, objects)),
         }
     }
     pub fn advance(&mut self) {
@@ -273,7 +274,7 @@ impl<'a> Parser<'a> {
     }
 
     pub fn emit_return(&mut self) {
-        self.emit_byte(op::RETURN)
+        self.emit_bytes(op::NIL, op::RETURN);
     }
 
     pub(crate) fn expression(&mut self) {
@@ -290,7 +291,7 @@ impl<'a> Parser<'a> {
         self.emit_bytes(op::CONSTANT, constant);
     }
 
-    pub fn end_compiler(&mut self) -> Option<FunctionObject<'a>> {
+    pub fn end_compiler(&mut self) -> ObjectPtr<FunctionObject<'a>> {
         self.emit_return();
 
         let function = self.compiler.take().unwrap().function;
@@ -307,7 +308,7 @@ impl<'a> Parser<'a> {
         self.error_at_current(arg);
     }
 
-    pub fn end(mut self) -> (Option<FunctionObject<'a>>, Table, RawObject) {
+    pub fn end(mut self) -> (ObjectPtr<FunctionObject<'a>>, Table, RawObject) {
         self.emit_return();
 
         let function = self.compiler.take().unwrap().function;
@@ -328,25 +329,11 @@ impl<'a> Parser<'a> {
         (function, self.table, self.objects)
     }
     pub fn current_chunk(&self) -> &Chunk {
-        &self
-            .compiler
-            .as_ref()
-            .unwrap()
-            .function
-            .as_ref()
-            .unwrap()
-            .chunk
+        &self.compiler.as_ref().unwrap().function.chunk
     }
 
     pub fn current_chunk_mut(&mut self) -> &mut Chunk {
-        &mut self
-            .compiler
-            .as_mut()
-            .unwrap()
-            .function
-            .as_mut()
-            .unwrap()
-            .chunk
+        &mut self.compiler.as_mut().unwrap().function.chunk
     }
 
     fn make_constant(&mut self, value: Value) -> u8 {
@@ -412,11 +399,14 @@ impl<'a> Parser<'a> {
     }
 
     pub fn string(&mut self, _can_assign: bool) {
-        let obj = Value::object(StringObject::new(
-            &self.previous.lexme[1..self.previous.lexme.len() - 1],
-            &mut self.table,
-            self.objects,
-        ));
+        let obj = Value::object(
+            StringObject::new(
+                &self.previous.lexme[1..self.previous.lexme.len() - 1],
+                &mut self.table,
+                self.objects,
+            )
+            .into(),
+        );
 
         self.objects = obj.as_obj();
 
@@ -491,6 +481,8 @@ impl<'a> Parser<'a> {
             self.while_statement();
         } else if self.match_token(TokenType::For) {
             self.for_statement();
+        } else if self.match_token(TokenType::Return) {
+            self.return_statement();
         } else {
             self.expression_statement();
         }
@@ -590,7 +582,7 @@ impl<'a> Parser<'a> {
     }
 
     fn identifier_constant(&mut self, lexme: &str) -> u8 {
-        let val = Value::object(StringObject::new(lexme, &mut self.table, self.objects));
+        let val = Value::object(StringObject::new(lexme, &mut self.table, self.objects).into());
         self.make_constant(val)
     }
 
@@ -872,8 +864,9 @@ impl<'a> Parser<'a> {
     }
 
     fn function(&mut self, function: FunctionType) {
-        let mut compiler = Compiler::new(function);
-        compiler.function.unwrap().name = Some(StringObject::new(
+        let mut compiler = Compiler::new(function, self.objects);
+
+        compiler.function.name = Some(StringObject::new(
             self.previous.lexme,
             &mut self.table,
             self.objects,
@@ -889,7 +882,7 @@ impl<'a> Parser<'a> {
 
         while !self.match_token(TokenType::RightParen) {
             {
-                let mut function = self.compiler.as_mut().unwrap().function.as_mut().unwrap();
+                let function = &mut self.compiler.as_mut().unwrap().function;
 
                 function.arity += 1;
 
@@ -911,9 +904,51 @@ impl<'a> Parser<'a> {
 
         std::mem::swap(&mut compiler, &mut self.compiler);
 
-        let constant = self.make_constant(Value::object(function.unwrap().to_raw()));
+        let constant = self.make_constant(Value::object(function.into()));
 
         self.emit_bytes(op::CONSTANT, constant)
+    }
+
+    fn call(&mut self) {
+        let arg_count = self.arg_list();
+        self.emit_bytes(op::CALL, arg_count)
+    }
+
+    fn arg_list(&mut self) -> u8 {
+        let mut count = 0;
+
+        if !self.check(TokenType::RightParen) {
+            loop {
+                self.expression();
+
+                if count == 255 {
+                    self.error("Can't have more than 255 arguments.");
+                }
+
+                count += 1;
+
+                if !self.match_token(TokenType::Comma) {
+                    break;
+                }
+            }
+        }
+
+        self.consume(TokenType::RightParen, "Expected ')' after arguments");
+
+        count
+    }
+
+    fn return_statement(&mut self) {
+        if self.compiler.as_ref().unwrap().compiler_type == FunctionType::Script {
+            self.error("Can't return from top-level code.")
+        }
+        if self.match_token(TokenType::SemiColon) {
+            self.emit_return();
+        } else {
+            self.expression();
+            self.consume(TokenType::SemiColon, "Expect ';' after return value.");
+            self.emit_byte(op::RETURN)
+        }
     }
 }
 

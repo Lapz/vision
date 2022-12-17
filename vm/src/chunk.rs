@@ -3,7 +3,7 @@ use std::ops::Index;
 use crate::op;
 use crate::value::Value;
 use crate::vm::print_value;
-
+#[derive(Debug)]
 pub struct Chunk {
     pub code: Vec<u8>,
     pub constants: Vec<Value>,
@@ -75,6 +75,7 @@ impl Chunk {
             op::JUMP => self.jump_instruction("op::JUMP", 1, offset),
             op::JUMP_IF_FALSE => self.jump_instruction("op::JUMP_IF_FALSE", 1, offset),
             op::LOOP => self.jump_instruction("OP::LOOP", -1, offset),
+            op::CALL => self.byte_instruction("OP::CALL", offset),
 
             _ => {
                 println!("Unknown opcode {}", instruction);

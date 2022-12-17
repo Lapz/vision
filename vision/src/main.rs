@@ -3,12 +3,10 @@ use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 use std::{env, error::Error};
-use vm::{Value, VM};
+use vm::{FunctionObject, ObjectPtr, Value, VM};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = env::args().collect::<Vec<String>>();
-
-    println!("{:?}", args);
 
     if args.len() == 1 {
         repl()?;
@@ -25,27 +23,28 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 fn interpret(src: &str) -> Result<(), Box<dyn std::error::Error>> {
     let (function, table, object_list) = compile(src).ok_or("Compile error")?;
 
-    match function {
-        Some(function) => {
-            let mut vm = VM::new(table, object_list);
+    if function.is_null() {
+        Err("Compile error".into())
+    } else {
+        let mut vm = VM::new(table, object_list);
 
-            vm.push(Value::object(function.to_raw()));
+        vm.push(Value::object(function.as_ptr_obj()));
 
-            let index = vm.frame_count;
+        vm.call(function.as_function(), 0);
 
-            vm.frame_count += 1;
+        let index = vm.frame_count;
 
-            let frame = vm.frames.get_mut(index).unwrap();
+        vm.frame_count += 1;
 
-            frame.function = function;
+        let frame = vm.frames.get_mut(index).unwrap();
 
-            frame.ip = 0;
+        frame.function = function;
 
-            frame.slots = vm.stack_top;
+        frame.ip = 0;
 
-            vm.run()
-        }
-        None => Err("Compile error".into()),
+        frame.slots = vm.stack_top;
+
+        vm.run()
     }
 }
 

@@ -1,9 +1,8 @@
 use crate::{
-    chunk::Chunk,
     frame::CallFrame,
     op,
     value::{Value, ValueType},
-    FunctionObject, ObjectType, RawObject, StringObject, Table,
+    FunctionObject, ObjectPtr, ObjectType, RawObject, StringObject, Table,
 };
 use std::fmt;
 pub const STACK_MAX: usize = FRAMES_MAX * (u8::BITS as usize);
@@ -39,6 +38,11 @@ impl std::error::Error for Error {}
 macro_rules! frame {
     ($vm:ident) => {{
         let frame = $vm.frames.get($vm.frame_count - 1).expect("No frame found");
+        frame
+    }};
+
+    ($vm:ident,$index:expr) => {{
+        let frame = $vm.frames.get($index).expect("No frame found");
         frame
     }};
 }
@@ -86,19 +90,16 @@ macro_rules! read_constant {
 
 macro_rules! binary_op {
     ($val_ty:ident,$op:tt,$self:ident) => {{
+        if !$self.peek(0).is_number() || !$self.peek(1).is_number() {
+            runtime_error!($self, "Operands must be numbers.");
+            return Err(Box::new(Error::RuntimeError));
+        }
 
+        let b = $self.pop().as_number();
 
-            if !$self.peek(0).is_number() || !$self.peek(1).is_number()  {
-                runtime_error!($self,"Operands must be numbers.");
-                return Err(Box::new(Error::RuntimeError))
-            }
+        let a = $self.pop().as_number();
 
-            let b = $self.pop().as_number();
-
-            let a = $self.pop().as_number();
-
-            $self.push(Value::$val_ty(a $op b));
-
+        $self.push(Value::$val_ty(a $op b));
     }};
 }
 
@@ -107,19 +108,22 @@ macro_rules! runtime_error {
         $crate::eprint!("\n")
     };
     ($self:ident,$($arg:tt)*) => {{
-        eprint!($($arg)*);
+        eprintln!("");
+        eprintln!($($arg)*);
 
 
-        let frame = frame!($self);
+        for i in (0..$self.frame_count).rev() {
+            let frame = frame!($self,i);
+            let instruction = frame.ip;
+            let line = frame.function.chunk.lines[instruction];
+            eprint!(" [line {}] in ", line);
+            if frame.function.name.is_none() {
+                eprintln!("script");
+            }else{
+                eprintln!("{}()",frame.function.name.unwrap().chars)
+            }
 
-
-        let instruction = frame.ip - frame.function.chunk.code[frame.ip - 1] as usize;
-
-        let line = frame.function.chunk.lines[instruction];
-
-
-        eprintln!(" [line {}] in script", line);
-
+        }
 
         $self.reset_stack();
 
@@ -179,7 +183,20 @@ impl<'a> VM<'a> {
 
             match instruction {
                 op::RETURN => {
-                    return Ok(());
+                    let result = self.pop();
+
+                    self.frame_count -= 1;
+
+                    if self.frame_count == 0 {
+                        self.pop();
+                        return Ok(());
+                    }
+
+                    let frame = frame!(self);
+
+                    self.stack_top = frame.slots;
+
+                    self.push(result);
                 }
                 op::NEGATE => {
                     if !self.peek(0).is_number() {
@@ -315,6 +332,16 @@ impl<'a> VM<'a> {
                     frame_mut!(self).ip -= offset;
                 }
 
+                op::CALL => {
+                    let arg_count = read_byte!(self);
+
+                    let callee = self.peek(0);
+
+                    if !self.call_value(callee, arg_count) {
+                        return Err(Box::new(Error::RuntimeError));
+                    }
+                }
+
                 _ => {
                     runtime_error!(self, "Unknown opcode");
 
@@ -337,8 +364,7 @@ impl<'a> VM<'a> {
     fn reset_stack(&mut self) {
         self.stack_top = 0;
     }
-
-    fn peek(&self, distance: i32) -> Value {
+    fn peek(&self, distance: usize) -> Value {
         self.stack[self.stack_top - 1 - distance as usize]
     }
 
@@ -355,12 +381,49 @@ impl<'a> VM<'a> {
         new_string.push_str(&b.as_string().chars[0..b.as_string().chars.len() - 1]);
         new_string.push('\0');
 
-        let result = Value::object(StringObject::from_owned(
-            new_string,
-            &mut self.strings,
-            self.objects,
-        ));
+        let result = Value::object(
+            StringObject::from_owned(new_string, &mut self.strings, self.objects).into(),
+        );
         self.push(result);
+    }
+
+    fn call_value(&mut self, callee: Value, arg_count: u8) -> bool {
+        if callee.is_obj() {
+            match callee.obj_type() {
+                ObjectType::String => {}
+                ObjectType::Function => return self.call(callee.as_function(), arg_count),
+            }
+        }
+        runtime_error!(self, "Can only call functions and classes.");
+        false
+    }
+
+    pub fn call(&mut self, callee: ObjectPtr<FunctionObject<'a>>, arg_count: u8) -> bool {
+        if self.frame_count == FRAMES_MAX {
+            runtime_error!(self, "Stack overflow.");
+
+            return false;
+        }
+
+        self.frame_count += 1;
+
+        let frame = frame_mut!(self);
+
+        if arg_count as usize != callee.arity {
+            runtime_error!(
+                self,
+                "Expected {} arguments but got {}",
+                callee.arity,
+                arg_count
+            );
+
+            return false;
+        }
+
+        frame.function = callee;
+        frame.slots = self.stack_top - arg_count as usize - 1;
+
+        true
     }
 }
 
@@ -377,7 +440,7 @@ pub fn print_value(value: Value) {
 pub fn print_object(value: Value) {
     match value.obj_type() {
         ObjectType::String => print!("{}", value.as_raw_string()),
-        ObjectType::Function => print_function(value.as_function()),
+        ObjectType::Function => print_function(&value.as_function()),
     }
 }
 
@@ -412,7 +475,7 @@ impl<'a> Drop for VM<'a> {
             #[cfg(feature = "debug")]
             {
                 print!("Freeing object ");
-                print_object(Value::object(obj));
+                // print_object(Value::object(obj));
                 print!("\n");
             }
 
