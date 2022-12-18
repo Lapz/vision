@@ -436,6 +436,7 @@ impl<'a> VM<'a> {
 
         let frame = frame_mut!(self);
 
+
         if arg_count != callee.arity {
             runtime_error!(
                 self,

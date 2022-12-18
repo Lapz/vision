@@ -1,11 +1,5 @@
-var breakfast = "beignets";
-var beverage = "cafe au lait";
-breakfast = "beignets avec " + beverage;
-print breakfast;
-
-
-fun a() {
-    return 10;
+fun sum(a, b, c) {
+  return a + b + c;
 }
 
-print a() * 2;
+print 4 + sum(5, 6, 7);

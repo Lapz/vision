@@ -32,18 +32,6 @@ fn interpret(src: &str) -> Result<(), Box<dyn std::error::Error>> {
 
         vm.push(Value::object(function.as_ptr_obj()));
 
-        let index = vm.frame_count;
-
-        vm.frame_count += 1;
-
-        let frame = vm.frames.get_mut(index).unwrap();
-
-        frame.function = function;
-
-        frame.ip = 0;
-
-        frame.slots = vm.stack_top;
-
         vm.call(function_ptr, 0);
 
         vm.run()

@@ -292,8 +292,7 @@ impl<'a> Parser<'a> {
     }
 
     pub fn end_compiler(&mut self) -> ObjectPtr<FunctionObject<'a>> {
-        // self.emit_return();
-
+        self.emit_return();
         let function = self.compiler.take().unwrap().function;
 
         #[cfg(feature = "debug")]
@@ -887,21 +886,29 @@ impl<'a> Parser<'a> {
 
         self.consume(TokenType::LeftParen, "Expected '(' after function name.");
 
-        while !self.match_token(TokenType::RightParen) {
-            {
-                let function = &mut self.compiler.as_mut().unwrap().function;
+        if !self.check(TokenType::RightParen) {
+            loop {
+                {
+                    let function = &mut self.compiler.as_mut().unwrap().function;
 
-                function.arity += 1;
+                    function.arity += 1;
 
-                if function.arity > 255 {
-                    self.error_at_current("Can't have more than 255 parameters.")
+                    if function.arity > 255 {
+                        self.error_at_current("Can't have more than 255 parameters.")
+                    }
+                }
+
+                let param = self.parse_variable("Expect parameter name.");
+
+                self.define_variable(param);
+
+                if !self.match_token(TokenType::Comma) {
+                    break;
                 }
             }
-
-            let param = self.parse_variable("Expect parameter name.");
-
-            self.define_variable(param);
         }
+
+        self.consume(TokenType::RightParen, "Expected ')' after parameters.");
 
         self.consume(TokenType::LeftBrace, "Expected '{' after function body.");
 
