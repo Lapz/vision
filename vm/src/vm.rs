@@ -93,7 +93,6 @@ macro_rules! read_constant {
 macro_rules! binary_op {
     ($val_ty:ident,$op:tt,$self:ident) => {{
 
-        println!("{:?} {:?}",$self.peek(0),$self.peek(1));
         if !$self.peek(0).is_number() || !$self.peek(1).is_number() {
             runtime_error!($self, "{} operands must be numbers",stringify!($op));
             return Err(Box::new(Error::RuntimeError));
@@ -186,14 +185,14 @@ impl<'a> VM<'a> {
                 op::RETURN => {
                     let result = self.pop();
 
+                    let frame = frame!(self);
+
                     self.frame_count -= 1;
 
                     if self.frame_count == 0 {
                         self.pop();
                         return Ok(());
                     }
-
-                    let frame = frame!(self);
 
                     self.stack_top = frame.slots;
 
@@ -448,6 +447,7 @@ impl<'a> VM<'a> {
             return false;
         }
 
+        frame.ip = 0;
         frame.function = callee;
         frame.slots = self.stack_top - arg_count - 1 as usize;
 
