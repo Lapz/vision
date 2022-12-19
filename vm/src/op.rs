@@ -1,25 +1,31 @@
-pub const RETURN: u8 = 0;
-pub const CONSTANT: u8 = 1;
-pub const NEGATE: u8 = 2;
-pub const ADD: u8 = 3;
-pub const SUBTRACT: u8 = 4;
-pub const MULTIPLY: u8 = 5;
-pub const DIVIDE: u8 = 6;
-pub const NIL: u8 = 7;
-pub const TRUE: u8 = 8;
-pub const FALSE: u8 = 9;
-pub const NOT: u8 = 10;
-pub const EQUAL: u8 = 11;
-pub const GREATER: u8 = 12;
-pub const LESS: u8 = 13;
-pub const PRINT: u8 = 14;
-pub const POP: u8 = 15;
-pub const DEFINE_GLOBAL: u8 = 16;
-pub const GET_GLOBAL: u8 = 17;
-pub const SET_GLOBAL: u8 = 18;
-pub const GET_LOCAL: u8 = 19;
-pub const SET_LOCAL: u8 = 20;
-pub const JUMP_IF_FALSE: u8 = 21;
-pub const JUMP: u8 = 22;
-pub const LOOP: u8 = 23;
-pub const CALL: u8 = 24;
+#[allow(non_camel_case_types)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum Op {
+    RETURN = 0,
+    CONSTANT = 1,
+    NEGATE = 2,
+    ADD = 3,
+    SUBTRACT = 4,
+    MULTIPLY = 5,
+    DIVIDE = 6,
+    NIL = 7,
+    TRUE = 8,
+    FALSE = 9,
+    NOT = 10,
+    EQUAL = 11,
+    GREATER = 12,
+    LESS = 13,
+    PRINT = 14,
+    POP = 15,
+    DEFINE_GLOBAL = 16,
+    GET_GLOBAL = 17,
+    SET_GLOBAL = 18,
+    GET_LOCAL = 19,
+    SET_LOCAL = 20,
+    JUMP_IF_FALSE = 21,
+    JUMP = 22,
+    LOOP = 23,
+    CALL = 24,
+    CLOSURE = 25,
+}

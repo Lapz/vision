@@ -1,9 +1,10 @@
 use crate::{
     frame::CallFrame,
     native::clock_native,
-    op,
+    op::{self, Op},
     value::{Value, ValueType},
-    FunctionObject, NativeFn, NativeObject, ObjectPtr, ObjectType, RawObject, StringObject, Table,
+    ClosureObject, FunctionObject, NativeFn, NativeObject, ObjectPtr, ObjectType, RawObject,
+    StringObject, Table,
 };
 use std::{fmt, result};
 pub const STACK_MAX: usize = FRAMES_MAX * (u8::BITS as usize);
@@ -181,171 +182,180 @@ impl<'a> VM<'a> {
                 }
             }
 
-            match instruction {
-                op::RETURN => {
-                    let result = self.pop();
+            unsafe {
+                match std::mem::transmute(instruction) {
+                    Op::RETURN => {
+                        let result = self.pop();
 
-                    let frame = frame!(self);
+                        let frame = frame!(self);
 
-                    self.frame_count -= 1;
+                        self.frame_count -= 1;
 
-                    if self.frame_count == 0 {
-                        self.pop();
-                        return Ok(());
+                        if self.frame_count == 0 {
+                            self.pop();
+                            return Ok(());
+                        }
+
+                        self.stack_top = frame.slots;
+
+                        self.push(result);
                     }
+                    Op::NEGATE => {
+                        if !self.peek(0).is_number() {
+                            runtime_error!(self, "Operand must be a number.");
 
-                    self.stack_top = frame.slots;
-
-                    self.push(result);
-                }
-                op::NEGATE => {
-                    if !self.peek(0).is_number() {
-                        runtime_error!(self, "Operand must be a number.");
-
-                        return Err(Box::new(Error::RuntimeError));
+                            return Err(Box::new(Error::RuntimeError));
+                        }
+                        let value = self.pop();
+                        self.push(Value::number(-value.as_number()));
                     }
-                    let value = self.pop();
-                    self.push(Value::number(-value.as_number()));
-                }
-                op::CONSTANT => {
-                    let constant = read_constant!(self);
-                    #[cfg(feature = "debug")]
-                    {
-                        print_value(constant);
-                        print!("\n");
+                    Op::CONSTANT => {
+                        let constant = read_constant!(self);
+                        #[cfg(feature = "debug")]
+                        {
+                            print_value(constant);
+                            print!("\n");
+                        }
+                        self.push(constant);
                     }
-                    self.push(constant);
-                }
-                op::GREATER => binary_op!(bool,>, self),
-                op::LESS => binary_op!(bool,< , self),
-                op::ADD => {
-                    if self.peek(0).is_string() && self.peek(1).is_string() {
-                        self.concatenate();
-                    } else if self.peek(0).is_number() && self.peek(1).is_number() {
+                    Op::GREATER => binary_op!(bool,>, self),
+                    Op::LESS => binary_op!(bool,< , self),
+                    Op::ADD => {
+                        if self.peek(0).is_string() && self.peek(1).is_string() {
+                            self.concatenate();
+                        } else if self.peek(0).is_number() && self.peek(1).is_number() {
+                            let b = self.pop();
+                            let a = self.pop();
+
+                            self.push(Value::number(a.as_number() + b.as_number()));
+                        } else {
+                            runtime_error!(self, "Operands must be two numbers or two strings.");
+                            return Err(Box::new(Error::RuntimeError));
+                        }
+                    }
+                    Op::SUBTRACT => binary_op!(number,- , self),
+                    Op::MULTIPLY => binary_op!(number,* , self),
+                    Op::DIVIDE => binary_op!(number,/ , self),
+                    Op::NIL => self.push(Value::nil()),
+                    Op::TRUE => self.push(Value::bool(true)),
+                    Op::FALSE => self.push(Value::bool(false)),
+                    Op::NOT => {
+                        let val = Value::bool(self.pop().is_falsey());
+                        self.push(val)
+                    }
+                    Op::EQUAL => {
                         let b = self.pop();
                         let a = self.pop();
-
-                        self.push(Value::number(a.as_number() + b.as_number()));
-                    } else {
-                        runtime_error!(self, "Operands must be two numbers or two strings.");
-                        return Err(Box::new(Error::RuntimeError));
+                        self.push(Value::bool(a == b));
                     }
-                }
-                op::SUBTRACT => binary_op!(number,- , self),
-                op::MULTIPLY => binary_op!(number,* , self),
-                op::DIVIDE => binary_op!(number,/ , self),
-                op::NIL => self.push(Value::nil()),
-                op::TRUE => self.push(Value::bool(true)),
-                op::FALSE => self.push(Value::bool(false)),
-                op::NOT => {
-                    let val = Value::bool(self.pop().is_falsey());
-                    self.push(val)
-                }
-                op::EQUAL => {
-                    let b = self.pop();
-                    let a = self.pop();
-                    self.push(Value::bool(a == b));
-                }
-                op::PRINT => {
-                    let val = self.pop();
-                    print_value(val);
-                    print!("\n");
-                }
-                op::POP => {
-                    self.pop();
-                }
-
-                op::DEFINE_GLOBAL => {
-                    let name = read_constant!(self).as_obj();
-                    let val = self.peek(0);
-                    self.globals.set(name, val);
-
-                    self.pop();
-                }
-                op::GET_GLOBAL => {
-                    let val = read_constant!(self);
-
-                    let obj_ptr = val.as_obj();
-
-                    let as_str = val.as_string();
-
-                    let val = self.globals.get(obj_ptr);
-
-                    if val.is_none() {
-                        runtime_error!(self, "Undefined variable '{}'", as_str.chars);
-                        return Err(Box::new(Error::RuntimeError));
+                    Op::PRINT => {
+                        let val = self.pop();
+                        print_value(val);
+                        print!("\n");
+                    }
+                    Op::POP => {
+                        self.pop();
                     }
 
-                    self.push(val.unwrap());
-                }
+                    Op::DEFINE_GLOBAL => {
+                        let name = read_constant!(self).as_obj();
+                        let val = self.peek(0);
+                        self.globals.set(name, val);
 
-                op::SET_GLOBAL => {
-                    let global_val = read_constant!(self);
+                        self.pop();
+                    }
+                    Op::GET_GLOBAL => {
+                        let val = read_constant!(self);
 
-                    let obj_ptr = global_val.as_obj();
+                        let obj_ptr = val.as_obj();
 
-                    let as_str = global_val.as_string();
+                        let as_str = val.as_string();
 
-                    let value = self.peek(0);
+                        let val = self.globals.get(obj_ptr);
 
-                    if self.globals.set(obj_ptr, value) {
-                        runtime_error!(self, "Undefined variable '{}'", as_str.chars);
-                        return Err(Box::new(Error::RuntimeError));
+                        if val.is_none() {
+                            runtime_error!(self, "Undefined variable '{}'", as_str.chars);
+                            return Err(Box::new(Error::RuntimeError));
+                        }
+
+                        self.push(val.unwrap());
                     }
 
-                    // self.push(val.unwrap());
-                }
+                    Op::SET_GLOBAL => {
+                        let global_val = read_constant!(self);
 
-                op::GET_LOCAL => {
-                    let slot = read_byte!(self);
-                    let index = frame!(self).slots + slot as usize;
-                    self.push(self.stack[index])
-                }
+                        let obj_ptr = global_val.as_obj();
 
-                op::SET_LOCAL => {
-                    let slot = read_byte!(self);
+                        let as_str = global_val.as_string();
 
-                    let val = self.peek(0);
+                        let value = self.peek(0);
 
-                    let index = frame!(self).slots + slot as usize;
+                        if self.globals.set(obj_ptr, value) {
+                            runtime_error!(self, "Undefined variable '{}'", as_str.chars);
+                            return Err(Box::new(Error::RuntimeError));
+                        }
 
-                    self.stack[index] = val;
-                }
-                op::JUMP_IF_FALSE => {
-                    let offset = read_short!(self) as usize;
+                        // self.push(val.unwrap());
+                    }
 
-                    let if_false = self.peek(0).is_falsey();
-                    if if_false {
+                    Op::GET_LOCAL => {
+                        let slot = read_byte!(self);
+                        let index = frame!(self).slots + slot as usize;
+                        self.push(self.stack[index])
+                    }
+
+                    Op::SET_LOCAL => {
+                        let slot = read_byte!(self);
+
+                        let val = self.peek(0);
+
+                        let index = frame!(self).slots + slot as usize;
+
+                        self.stack[index] = val;
+                    }
+                    Op::JUMP_IF_FALSE => {
+                        let offset = read_short!(self) as usize;
+
+                        let if_false = self.peek(0).is_falsey();
+                        if if_false {
+                            frame_mut!(self).ip += offset;
+                        }
+                    }
+
+                    Op::JUMP => {
+                        let offset = read_short!(self) as usize;
+
                         frame_mut!(self).ip += offset;
                     }
-                }
 
-                op::JUMP => {
-                    let offset = read_short!(self) as usize;
+                    Op::LOOP => {
+                        let offset = read_short!(self) as usize;
 
-                    frame_mut!(self).ip += offset;
-                }
+                        frame_mut!(self).ip -= offset;
+                    }
 
-                op::LOOP => {
-                    let offset = read_short!(self) as usize;
+                    Op::CALL => {
+                        let arg_count = read_byte!(self);
 
-                    frame_mut!(self).ip -= offset;
-                }
+                        let callee = self.peek(arg_count as usize);
 
-                op::CALL => {
-                    let arg_count = read_byte!(self);
+                        if !self.call_value(callee, arg_count as usize) {
+                            return Err(Box::new(Error::RuntimeError));
+                        }
+                    }
 
-                    let callee = self.peek(arg_count as usize);
+                    Op::CLOSURE => {
+                        let function = read_constant!(self).as_function();
+                        let closure = ClosureObject::new(function);
 
-                    if !self.call_value(callee, arg_count as usize) {
+                        self.push(Value::object(closure.into()))
+                    }
+
+                    _ => {
+                        runtime_error!(self, "Unknown opcode");
+
                         return Err(Box::new(Error::RuntimeError));
                     }
-                }
-
-                _ => {
-                    runtime_error!(self, "Unknown opcode");
-
-                    return Err(Box::new(Error::RuntimeError));
                 }
             }
         }
@@ -356,7 +366,7 @@ impl<'a> VM<'a> {
         self.stack_top += 1;
     }
 
-    fn pop(&mut self) -> Value {
+    pub fn pop(&mut self) -> Value {
         self.stack_top -= 1;
         self.stack[self.stack_top]
     }
@@ -404,7 +414,8 @@ impl<'a> VM<'a> {
         if callee.is_obj() {
             match callee.obj_type() {
                 ObjectType::String => {}
-                ObjectType::Function => return self.call(callee.as_function(), arg_count),
+                ObjectType::Closure => return self.call(callee.as_closure(), arg_count),
+                ObjectType::Function => {} //we wrap all functions in ClosureObjects so the runtime will never try to invoke a bare FunctionObject anymore
                 ObjectType::Native => {
                     let native = callee.as_native();
 
@@ -426,7 +437,7 @@ impl<'a> VM<'a> {
         false
     }
 
-    pub fn call(&mut self, callee: ObjectPtr<FunctionObject<'a>>, arg_count: usize) -> bool {
+    pub fn call(&mut self, callee: ObjectPtr<ClosureObject<'a>>, arg_count: usize) -> bool {
         if self.frame_count == FRAMES_MAX {
             runtime_error!(self, "Stack overflow.");
             return false;
@@ -436,12 +447,11 @@ impl<'a> VM<'a> {
 
         let frame = frame_mut!(self);
 
-
-        if arg_count != callee.arity {
+        if arg_count != callee.function.arity {
             runtime_error!(
                 self,
                 "Expected {} arguments but got {}",
-                callee.arity,
+                callee.function.arity,
                 arg_count
             );
 
@@ -449,7 +459,7 @@ impl<'a> VM<'a> {
         }
 
         frame.ip = 0;
-        frame.function = callee;
+        frame.function = callee.function.clone();
         frame.slots = self.stack_top - arg_count - 1 as usize;
 
         true
@@ -471,6 +481,7 @@ pub fn print_object(value: Value) {
         ObjectType::String => print!("{}", value.as_raw_string()),
         ObjectType::Function => print_function(&value.as_function()),
         ObjectType::Native => print!("<native fn>"),
+        ObjectType::Closure => print_function(&value.as_closure().function),
     }
 }
 

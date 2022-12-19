@@ -3,7 +3,7 @@ use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 use std::{env, error::Error};
-use vm::{FunctionObject, ObjectPtr, Value, VM};
+use vm::{ClosureObject, FunctionObject, ObjectPtr, Value, VM};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = env::args().collect::<Vec<String>>();
@@ -32,7 +32,13 @@ fn interpret(src: &str) -> Result<(), Box<dyn std::error::Error>> {
 
         vm.push(Value::object(function.as_ptr_obj()));
 
-        vm.call(function_ptr, 0);
+        let closure = ClosureObject::new(function_ptr);
+
+        vm.pop();
+
+        vm.push(Value::object(closure.clone().into()));
+
+        vm.call(closure, 0);
 
         vm.run()
     }

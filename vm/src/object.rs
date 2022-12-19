@@ -42,6 +42,12 @@ pub struct NativeObject {
     pub obj: Object,
     pub function: NativeFn,
 }
+#[derive(Debug)]
+#[repr(C)]
+pub struct ClosureObject<'a> {
+    pub obj: Object,
+    pub function: ObjectPtr<FunctionObject<'a>>,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 
@@ -49,6 +55,7 @@ pub enum ObjectType {
     String,
     Function,
     Native,
+    Closure,
 }
 
 impl Object {
@@ -161,6 +168,18 @@ impl NativeObject {
         })) as RawObject)
     }
 }
+
+impl<'a> ClosureObject<'a> {
+    pub fn new(function: ObjectPtr<FunctionObject<'a>>) -> ObjectPtr<Self> {
+        ObjectPtr::new(Box::into_raw(Box::new(ClosureObject {
+            obj: Object::new(
+                ObjectType::Closure,
+                std::ptr::null::<RawObject>() as RawObject,
+            ),
+            function,
+        })) as RawObject)
+    }
+}
 impl<T: ?Sized + Debug> ObjectPtr<T> {
     pub fn new(ptr: RawObject) -> ObjectPtr<T> {
         Self {
@@ -185,14 +204,29 @@ impl<T: ?Sized + Debug> ObjectPtr<T> {
     }
 
     pub fn as_function<'a>(&self) -> ObjectPtr<FunctionObject<'a>> {
-        ObjectPtr::new(self.ptr)
-    }
-
-    pub fn as_native_function(&self) -> ObjectPtr<NativeObject> {
+        #[cfg(debug_assertions)]
+        unsafe {
+            let obj = *&(*self.as_ptr());
+            assert!(obj.ty == ObjectType::Function)
+        }
         ObjectPtr::new(self.ptr)
     }
 
     pub fn as_native(&self) -> ObjectPtr<NativeObject> {
+        #[cfg(debug_assertions)]
+        unsafe {
+            let obj = *&(*self.as_ptr());
+            assert!(obj.ty == ObjectType::Native)
+        }
+        ObjectPtr::new(self.ptr)
+    }
+
+    pub fn as_closure<'a>(&self) -> ObjectPtr<ClosureObject<'a>> {
+        #[cfg(debug_assertions)]
+        unsafe {
+            let obj = *&(*self.as_ptr());
+            assert!(obj.ty == ObjectType::Closure)
+        }
         ObjectPtr::new(self.ptr)
     }
 
@@ -203,6 +237,22 @@ impl<T: ?Sized + Debug> ObjectPtr<T> {
     pub fn is_null(&self) -> bool {
         self.ptr.is_null()
     }
+}
+
+macro_rules! impl_object_traits {
+    ($trait:ident) => {
+        impl<'a> AsRef<$trait<'a>> for ObjectPtr<$trait<'a>> {
+            fn as_ref(&self) -> &$trait<'a> {
+                unsafe { &*(self.ptr as *const $trait<'a>) }
+            }
+        }
+
+        impl<'a> Into<ObjectPtr<RawObject>> for ObjectPtr<$trait<'a>> {
+            fn into(self) -> ObjectPtr<RawObject> {
+                ObjectPtr::new(self.ptr)
+            }
+        }
+    };
 }
 
 impl<T: Debug> Deref for ObjectPtr<T> {
@@ -219,33 +269,31 @@ impl<'a> DerefMut for ObjectPtr<FunctionObject<'a>> {
     }
 }
 
-impl<'a> AsRef<StringObject<'a>> for ObjectPtr<StringObject<'a>> {
-    fn as_ref(&self) -> &StringObject<'a> {
-        unsafe { &*(self.ptr as *const StringObject<'a>) }
-    }
-}
-
-impl<'a> AsRef<FunctionObject<'a>> for ObjectPtr<StringObject<'a>> {
-    fn as_ref(&self) -> &FunctionObject<'a> {
-        unsafe { &*(self.ptr as *const FunctionObject<'a>) }
-    }
-}
-
-impl<'a> Into<ObjectPtr<RawObject>> for ObjectPtr<StringObject<'a>> {
-    fn into(self) -> ObjectPtr<RawObject> {
-        ObjectPtr::new(self.ptr)
-    }
-}
-
-impl<'a> Into<ObjectPtr<RawObject>> for ObjectPtr<FunctionObject<'a>> {
-    fn into(self) -> ObjectPtr<RawObject> {
-        ObjectPtr::new(self.ptr)
-    }
-}
+impl_object_traits!(StringObject);
+impl_object_traits!(FunctionObject);
+impl_object_traits!(ClosureObject);
 
 impl<'a> Into<ObjectPtr<RawObject>> for ObjectPtr<NativeObject> {
     fn into(self) -> ObjectPtr<RawObject> {
         ObjectPtr::new(self.ptr)
+    }
+}
+
+impl<'a> Clone for ObjectPtr<ClosureObject<'a>> {
+    fn clone(&self) -> Self {
+        Self {
+            ptr: self.ptr,
+            tag: self.tag,
+        }
+    }
+}
+
+impl<'a> Clone for ObjectPtr<FunctionObject<'a>> {
+    fn clone(&self) -> Self {
+        Self {
+            ptr: self.ptr,
+            tag: self.tag,
+        }
     }
 }
 

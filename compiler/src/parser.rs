@@ -5,7 +5,7 @@ use crate::{
     scanner::Scanner,
     token::{Token, TokenType},
 };
-use vm::{chunk::Chunk, FunctionObject, ObjectPtr, RawObject, Table, Value};
+use vm::{chunk::Chunk, op::Op, FunctionObject, ObjectPtr, RawObject, Table, Value};
 use vm::{op, StringObject};
 
 pub struct Parser<'a> {
@@ -274,7 +274,7 @@ impl<'a> Parser<'a> {
     }
 
     pub fn emit_return(&mut self) {
-        self.emit_bytes(op::NIL, op::RETURN);
+        self.emit_bytes(Op::NIL as u8, Op::RETURN as u8);
     }
 
     pub(crate) fn expression(&mut self) {
@@ -288,7 +288,7 @@ impl<'a> Parser<'a> {
 
     pub fn emit_constant(&mut self, value: Value) {
         let constant = self.make_constant(value);
-        self.emit_bytes(op::CONSTANT, constant);
+        self.emit_bytes(Op::CONSTANT as u8, constant);
     }
 
     pub fn end_compiler(&mut self) -> ObjectPtr<FunctionObject<'a>> {
@@ -365,8 +365,8 @@ impl<'a> Parser<'a> {
         self.parse_with_precedence(Precedence::Unary);
 
         match ty {
-            TokenType::Minus => self.emit_byte(op::NEGATE),
-            TokenType::Bang => self.emit_byte(op::NOT),
+            TokenType::Minus => self.emit_byte(Op::NEGATE as u8),
+            TokenType::Bang => self.emit_byte(Op::NOT as u8),
             _ => unreachable!(),
         }
     }
@@ -379,16 +379,16 @@ impl<'a> Parser<'a> {
         self.parse_with_precedence(rule.precedence.higher());
 
         match ty {
-            TokenType::BangEqual => self.emit_bytes(op::EQUAL, op::NOT),
-            TokenType::EqualEqual => self.emit_byte(op::EQUAL),
-            TokenType::Greater => self.emit_byte(op::GREATER),
-            TokenType::GreaterEqual => self.emit_bytes(op::LESS, op::NOT),
-            TokenType::Less => self.emit_byte(op::LESS),
-            TokenType::LessEqual => self.emit_bytes(op::GREATER, op::NOT),
-            TokenType::Plus => self.emit_byte(op::ADD),
-            TokenType::Minus => self.emit_byte(op::SUBTRACT),
-            TokenType::Star => self.emit_byte(op::MULTIPLY),
-            TokenType::Slash => self.emit_byte(op::DIVIDE),
+            TokenType::BangEqual => self.emit_bytes(Op::EQUAL as u8, Op::NOT as u8),
+            TokenType::EqualEqual => self.emit_byte(Op::EQUAL as u8),
+            TokenType::Greater => self.emit_byte(Op::GREATER as u8),
+            TokenType::GreaterEqual => self.emit_bytes(Op::LESS as u8, Op::NOT as u8),
+            TokenType::Less => self.emit_byte(Op::LESS as u8),
+            TokenType::LessEqual => self.emit_bytes(Op::GREATER as u8, Op::NOT as u8),
+            TokenType::Plus => self.emit_byte(Op::ADD as u8),
+            TokenType::Minus => self.emit_byte(Op::SUBTRACT as u8),
+            TokenType::Star => self.emit_byte(Op::MULTIPLY as u8),
+            TokenType::Slash => self.emit_byte(Op::DIVIDE as u8),
             _ => unreachable!(),
         }
     }
@@ -397,9 +397,9 @@ impl<'a> Parser<'a> {
         let ty = self.previous.ty;
 
         match ty {
-            TokenType::False => self.emit_byte(op::FALSE),
-            TokenType::Nil => self.emit_byte(op::NIL),
-            TokenType::True => self.emit_byte(op::TRUE),
+            TokenType::False => self.emit_byte(Op::FALSE as u8),
+            TokenType::Nil => self.emit_byte(Op::NIL as u8),
+            TokenType::True => self.emit_byte(Op::TRUE as u8),
             _ => unreachable!(),
         }
     }
@@ -501,13 +501,13 @@ impl<'a> Parser<'a> {
     fn print_statement(&mut self) {
         self.expression();
         self.consume(TokenType::SemiColon, "Expect ';' after value.");
-        self.emit_byte(op::PRINT)
+        self.emit_byte(Op::PRINT as u8)
     }
 
     fn expression_statement(&mut self) {
         self.expression();
         self.consume(TokenType::SemiColon, "Expected ';' after expression.");
-        self.emit_byte(op::POP);
+        self.emit_byte(Op::POP as u8);
     }
 
     fn synchronize(&mut self) {
@@ -540,7 +540,7 @@ impl<'a> Parser<'a> {
         if self.match_token(TokenType::Equal) {
             self.expression()
         } else {
-            self.emit_byte(op::NIL)
+            self.emit_byte(Op::NIL as u8)
         }
 
         self.consume(
@@ -584,7 +584,7 @@ impl<'a> Parser<'a> {
             self.mark_initialized();
             return;
         }
-        self.emit_bytes(op::DEFINE_GLOBAL, global)
+        self.emit_bytes(Op::DEFINE_GLOBAL as u8, global)
     }
 
     fn identifier_constant(&mut self, lexme: &str) -> u8 {
@@ -605,12 +605,12 @@ impl<'a> Parser<'a> {
             let arg = self.resolve_local(name);
 
             if arg.is_none() {
-                get_op = op::GET_GLOBAL;
-                set_op = op::SET_GLOBAL;
+                get_op = Op::GET_GLOBAL as u8;
+                set_op = Op::SET_GLOBAL as u8;
                 self.identifier_constant(name)
             } else {
-                get_op = op::GET_LOCAL;
-                set_op = op::SET_LOCAL;
+                get_op = Op::GET_LOCAL as u8;
+                set_op = Op::SET_LOCAL as u8;
                 arg.unwrap()
             }
         };
@@ -642,7 +642,7 @@ impl<'a> Parser<'a> {
                 .depth
                 > self.compiler.as_ref().unwrap().scope_depth
         {
-            self.emit_byte(op::POP);
+            self.emit_byte(Op::POP as u8);
             self.compiler.as_mut().unwrap().local_count -= 1;
         }
     }
@@ -712,15 +712,15 @@ impl<'a> Parser<'a> {
         self.expression();
         self.consume(TokenType::RightParen, "Expect ')' after 'if'.");
 
-        let then_jump = self.emit_jump(op::JUMP_IF_FALSE);
+        let then_jump = self.emit_jump(Op::JUMP_IF_FALSE as u8);
 
         self.statement();
 
-        let else_jump = self.emit_jump(op::JUMP);
+        let else_jump = self.emit_jump(Op::JUMP as u8);
 
         self.patch_jump(then_jump);
 
-        self.emit_byte(op::POP);
+        self.emit_byte(Op::POP as u8);
 
         if self.match_token(TokenType::Else) {
             self.statement();
@@ -747,9 +747,9 @@ impl<'a> Parser<'a> {
     }
 
     fn and(&mut self) {
-        let end_jump = self.emit_jump(op::JUMP_IF_FALSE);
+        let end_jump = self.emit_jump(Op::JUMP_IF_FALSE as u8);
 
-        self.emit_byte(op::POP);
+        self.emit_byte(Op::POP as u8);
 
         self.parse_with_precedence(Precedence::And);
 
@@ -757,12 +757,12 @@ impl<'a> Parser<'a> {
     }
 
     fn or(&mut self) {
-        let else_jump = self.emit_jump(op::JUMP_IF_FALSE);
-        let end_jump = self.emit_jump(op::JUMP);
+        let else_jump = self.emit_jump(Op::JUMP_IF_FALSE as u8);
+        let end_jump = self.emit_jump(Op::JUMP as u8);
 
         self.patch_jump(else_jump);
 
-        self.emit_byte(op::POP);
+        self.emit_byte(Op::POP as u8);
 
         self.parse_with_precedence(Precedence::Or);
 
@@ -778,9 +778,9 @@ impl<'a> Parser<'a> {
 
         self.consume(TokenType::RightParen, "Expected ')' after condition");
 
-        let exit_jump = self.emit_jump(op::JUMP_IF_FALSE);
+        let exit_jump = self.emit_jump(Op::JUMP_IF_FALSE as u8);
 
-        self.emit_byte(op::POP);
+        self.emit_byte(Op::POP as u8);
 
         self.statement();
 
@@ -788,11 +788,11 @@ impl<'a> Parser<'a> {
 
         self.patch_jump(exit_jump);
 
-        self.emit_byte(op::POP)
+        self.emit_byte(Op::POP as u8)
     }
 
     fn emit_loop(&mut self, loop_start: usize) {
-        self.emit_byte(op::LOOP);
+        self.emit_byte(Op::LOOP as u8);
 
         let offset = (self.current_chunk().code.len() - loop_start + 2) as u16;
 
@@ -824,19 +824,19 @@ impl<'a> Parser<'a> {
 
             self.consume(TokenType::SemiColon, "Expected ';' after loop condition");
 
-            exit_jump = Some(self.emit_jump(op::JUMP_IF_FALSE));
+            exit_jump = Some(self.emit_jump(Op::JUMP_IF_FALSE as u8));
 
-            self.emit_byte(op::POP)
+            self.emit_byte(Op::POP as u8)
         }
 
         if !self.match_token(TokenType::RightParen) {
-            let body_jump = self.emit_jump(op::JUMP);
+            let body_jump = self.emit_jump(Op::JUMP as u8);
 
             let increment_start = self.current_chunk().code.len();
 
             self.expression();
 
-            self.emit_byte(op::POP);
+            self.emit_byte(Op::POP as u8);
 
             self.consume(TokenType::RightParen, "Expect ')' after for clauses.");
 
@@ -853,7 +853,7 @@ impl<'a> Parser<'a> {
 
         if exit_jump.is_some() {
             self.patch_jump(exit_jump.unwrap());
-            self.emit_byte(op::POP)
+            self.emit_byte(Op::POP as u8)
         }
 
         self.end_scope();
@@ -920,12 +920,12 @@ impl<'a> Parser<'a> {
 
         let constant = self.make_constant(Value::object(function.into()));
 
-        self.emit_bytes(op::CONSTANT, constant)
+        self.emit_bytes(Op::CLOSURE as u8, constant)
     }
 
     fn call(&mut self) {
         let arg_count = self.arg_list();
-        self.emit_bytes(op::CALL, arg_count)
+        self.emit_bytes(Op::CALL as u8, arg_count)
     }
 
     fn arg_list(&mut self) -> u8 {
@@ -961,7 +961,7 @@ impl<'a> Parser<'a> {
         } else {
             self.expression();
             self.consume(TokenType::SemiColon, "Expect ';' after return value.");
-            self.emit_byte(op::RETURN)
+            self.emit_byte(Op::RETURN as u8)
         }
     }
 }

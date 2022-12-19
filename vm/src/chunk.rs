@@ -1,6 +1,6 @@
 use std::ops::Index;
 
-use crate::op;
+use crate::op::{self, Op};
 use crate::value::Value;
 use crate::vm::print_value;
 #[derive(Debug)]
@@ -50,36 +50,45 @@ impl Chunk {
 
         let instruction = self.code[offset];
 
-        match instruction {
-            op::RETURN => self.simple_instruction("OP::RETURN", offset),
-            op::CONSTANT => self.constant_instruction("OP::CONSTANT", offset),
-            op::NEGATE => self.simple_instruction("OP::NEGATE", offset),
-            op::ADD => self.simple_instruction("OP::ADD", offset),
-            op::SUBTRACT => self.simple_instruction("OP::SUBTRACT", offset),
-            op::MULTIPLY => self.simple_instruction("OP::MULTIPLY", offset),
-            op::DIVIDE => self.simple_instruction("OP::DIVIDE", offset),
-            op::NIL => self.simple_instruction("OP::NIL", offset),
-            op::TRUE => self.simple_instruction("OP::TRUE", offset),
-            op::FALSE => self.simple_instruction("OP::FALSE", offset),
-            op::NOT => self.simple_instruction("OP::NOT", offset),
-            op::EQUAL => self.simple_instruction("OP::EQUAL", offset),
-            op::GREATER => self.simple_instruction("OP::GREATER", offset),
-            op::LESS => self.simple_instruction("OP::LESS", offset),
-            op::PRINT => self.simple_instruction("OP::PRINT", offset),
-            op::POP => self.simple_instruction("OP::POP", offset),
-            op::DEFINE_GLOBAL => self.constant_instruction("OP::DEFINE_GLOBAL", offset),
-            op::GET_GLOBAL => self.constant_instruction("OP::GET_GLOBAL", offset),
-            op::SET_GLOBAL => self.constant_instruction("OP::SET_GLOBAL", offset),
-            op::GET_LOCAL => self.byte_instruction("OP::GET_LOCAL", offset),
-            op::SET_LOCAL => self.byte_instruction("OP::GET_LOCAL", offset),
-            op::JUMP => self.jump_instruction("op::JUMP", 1, offset),
-            op::JUMP_IF_FALSE => self.jump_instruction("op::JUMP_IF_FALSE", 1, offset),
-            op::LOOP => self.jump_instruction("OP::LOOP", -1, offset),
-            op::CALL => self.byte_instruction("OP::CALL", offset),
+        unsafe {
+            match std::mem::transmute(instruction) {
+                Op::RETURN => self.simple_instruction("OP::RETURN", offset),
+                Op::CONSTANT => self.constant_instruction("OP::CONSTANT", offset),
+                Op::NEGATE => self.simple_instruction("OP::NEGATE", offset),
+                Op::ADD => self.simple_instruction("OP::ADD", offset),
+                Op::SUBTRACT => self.simple_instruction("OP::SUBTRACT", offset),
+                Op::MULTIPLY => self.simple_instruction("OP::MULTIPLY", offset),
+                Op::DIVIDE => self.simple_instruction("OP::DIVIDE", offset),
+                Op::NIL => self.simple_instruction("OP::NIL", offset),
+                Op::TRUE => self.simple_instruction("OP::TRUE", offset),
+                Op::FALSE => self.simple_instruction("OP::FALSE", offset),
+                Op::NOT => self.simple_instruction("OP::NOT", offset),
+                Op::EQUAL => self.simple_instruction("OP::EQUAL", offset),
+                Op::GREATER => self.simple_instruction("OP::GREATER", offset),
+                Op::LESS => self.simple_instruction("OP::LESS", offset),
+                Op::PRINT => self.simple_instruction("OP::PRINT", offset),
+                Op::POP => self.simple_instruction("OP::POP", offset),
+                Op::DEFINE_GLOBAL => self.constant_instruction("OP::DEFINE_GLOBAL", offset),
+                Op::GET_GLOBAL => self.constant_instruction("OP::GET_GLOBAL", offset),
+                Op::SET_GLOBAL => self.constant_instruction("OP::SET_GLOBAL", offset),
+                Op::GET_LOCAL => self.byte_instruction("OP::GET_LOCAL", offset),
+                Op::SET_LOCAL => self.byte_instruction("OP::GET_LOCAL", offset),
+                Op::JUMP => self.jump_instruction("op::JUMP", 1, offset),
+                Op::JUMP_IF_FALSE => self.jump_instruction("op::JUMP_IF_FALSE", 1, offset),
+                Op::LOOP => self.jump_instruction("OP::LOOP", -1, offset),
+                Op::CALL => self.byte_instruction("OP::CALL", offset),
+                Op::CLOSURE => {
+                    let constant = self.code[offset + 1];
+                    print!("{:16}{:4} '", "OP_CLOSURE", constant);
+                    print_value(self.constants[constant as usize]);
+                    println!();
 
-            _ => {
-                println!("Unknown opcode {}", instruction);
-                offset + 1
+                    offset + 2
+                }
+                _ => {
+                    println!("Unknown opcode {}", instruction);
+                    offset + 1
+                }
             }
         }
     }
