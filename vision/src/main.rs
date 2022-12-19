@@ -3,7 +3,7 @@ use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 use std::{env, error::Error};
-use vm::{ClosureObject, FunctionObject, ObjectPtr, Value, VM};
+use vm::{ClosureObject, Value, VM};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = env::args().collect::<Vec<String>>();

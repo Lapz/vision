@@ -28,4 +28,6 @@ pub enum Op {
     LOOP = 23,
     CALL = 24,
     CLOSURE = 25,
+    GET_UPVALUE = 26,
+    SET_UPVALUE = 27,
 }

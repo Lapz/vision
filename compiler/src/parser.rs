@@ -12,12 +12,13 @@ pub struct Parser<'a> {
     scanner: Scanner<'a>,
     previous: Token<'a>,
     current: Token<'a>,
-    pub had_error: bool,
+    had_error: bool,
     panic_mode: bool,
     rules: HashMap<TokenType, ParseRule<'a>>,
     objects: RawObject,
     table: Table,
-    compiler: Option<Compiler<'a>>,
+    compilers: Vec<Compiler<'a>>,
+    current_compiler: usize,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
@@ -217,8 +218,13 @@ impl<'a> Parser<'a> {
             },
             objects,
             table: Table::new(),
-            compiler: Some(Compiler::new(FunctionType::Script, objects)),
+            compilers: vec![Compiler::new(FunctionType::Script, objects)],
+            current_compiler: 0,
         }
+    }
+
+    pub fn had_error(&self) -> bool {
+        self.had_error
     }
     pub fn advance(&mut self) {
         std::mem::swap(&mut self.previous, &mut self.current);
@@ -291,9 +297,23 @@ impl<'a> Parser<'a> {
         self.emit_bytes(Op::CONSTANT as u8, constant);
     }
 
+    pub fn start_compiler(&mut self, function: FunctionType) {
+        let mut compiler = Compiler::new(function, self.objects);
+
+        compiler.function.name = Some(StringObject::new(
+            self.previous.lexme,
+            &mut self.table,
+            self.objects,
+        ));
+
+        self.current_compiler += 1;
+        self.compilers.push(compiler);
+    }
+
     pub fn end_compiler(&mut self) -> ObjectPtr<FunctionObject<'a>> {
         self.emit_return();
-        let function = self.compiler.take().unwrap().function;
+
+        let function = self.current_compiler().function.clone();
 
         #[cfg(feature = "debug")]
         {
@@ -303,7 +323,19 @@ impl<'a> Parser<'a> {
             });
         }
 
+        self.compilers.pop();
+        self.current_compiler -= 1;
+
         function
+    }
+
+    #[inline]
+    pub fn current_compiler(&self) -> &Compiler<'a> {
+        &self.compilers[self.current_compiler]
+    }
+    #[inline]
+    pub fn current_compiler_mut(&mut self) -> &mut Compiler<'a> {
+        &mut self.compilers[self.current_compiler]
     }
 
     pub(crate) fn consume(&mut self, ty: TokenType, arg: &str) {
@@ -321,25 +353,24 @@ impl<'a> Parser<'a> {
         #[cfg(feature = "debug")]
         {
             if !self.had_error {
-                self.current_chunk().disassemble(
-                    match self.compiler.as_ref().unwrap().function.name {
+                self.current_chunk()
+                    .disassemble(match self.current_compiler().function.name {
                         Some(name) => name.chars,
                         None => "<script>",
-                    },
-                );
+                    });
             }
         }
 
-        let function = self.compiler.take().unwrap().function;
+        let function = self.current_compiler().function.clone();
 
         (function, self.table, self.objects)
     }
     pub fn current_chunk(&self) -> &Chunk {
-        &self.compiler.as_ref().unwrap().function.chunk
+        &self.current_compiler().function.chunk
     }
 
     pub fn current_chunk_mut(&mut self) -> &mut Chunk {
-        &mut self.compiler.as_mut().unwrap().function.chunk
+        &mut self.current_compiler_mut().function.chunk
     }
 
     fn make_constant(&mut self, value: Value) -> u8 {
@@ -556,31 +587,25 @@ impl<'a> Parser<'a> {
 
         self.declare_variable();
 
-        if self
-            .compiler
-            .as_ref()
-            .expect("Started compiling a block with no compiler")
-            .scope_depth
-            > 0
-        {
+        if self.current_compiler().scope_depth > 0 {
             return 0;
         }
         self.identifier_constant(self.previous.lexme)
     }
 
     fn mark_initialized(&mut self) {
-        let current_depth = self.compiler.as_ref().unwrap().scope_depth;
+        let current_depth = self.current_compiler().scope_depth;
 
         if current_depth == 0 {
             return;
         }
 
-        let slot = self.compiler.as_ref().unwrap().local_count - 1;
+        let slot = self.current_compiler().local_count - 1;
 
-        self.compiler.as_mut().unwrap().locals[slot].depth = current_depth
+        self.current_compiler_mut().locals[slot].depth = current_depth
     }
     fn define_variable(&mut self, global: u8) {
-        if self.compiler.as_ref().unwrap().scope_depth > 0 {
+        if self.current_compiler().scope_depth > 0 {
             self.mark_initialized();
             return;
         }
@@ -602,9 +627,10 @@ impl<'a> Parser<'a> {
         let set_op;
 
         let arg = {
-            let arg = self.resolve_local(name);
+            let arg = self.resolve_upvalue(self.current_compiler, name);
 
             if arg.is_none() {
+                println!("resolved {:?}", arg);
                 get_op = Op::GET_GLOBAL as u8;
                 set_op = Op::SET_GLOBAL as u8;
                 self.identifier_constant(name)
@@ -623,27 +649,68 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn resolve_upvalue(&mut self, compiler_index: usize, name: &str) -> Option<u8> {
+        // compiler->enclosing => compiler_index+1
+
+        if compiler_index == 0 || self.compilers.get(compiler_index - 1).is_none() {
+            println!("here");
+            return None;
+        }
+
+        let local = self.resolve_local(compiler_index, name);
+
+        if local.is_some() {
+            return Some(self.add_upvalue(compiler_index - 1, local.unwrap(), true));
+        }
+
+        let upvalue = self.resolve_upvalue(compiler_index - 1, name);
+
+        if upvalue.is_some() {
+            return Some(self.add_upvalue(compiler_index - 1, upvalue.unwrap(), false));
+        }
+
+        None
+    }
+
+    fn add_upvalue(&mut self, compiler_index: usize, local_index: u8, is_local: bool) -> u8 {
+        let compiler = &mut self.compilers[compiler_index];
+
+        let upvalue_count = compiler.function.upvalue_count;
+
+        for i in 0..upvalue_count {
+            if compiler.upvalues[i].index == local_index
+                && compiler.upvalues[i].is_local == is_local
+            {
+                return i as u8;
+            }
+        }
+
+        if upvalue_count as u8 == u8::MAX {
+            self.error("Too many closure variables in function.");
+            return 0;
+        }
+
+        compiler.upvalues[upvalue_count].is_local = is_local;
+        compiler.upvalues[upvalue_count].index = local_index;
+
+        compiler.function.upvalue_count += 1;
+
+        upvalue_count as u8
+    }
+
     fn begin_scope(&mut self) {
-        self.compiler
-            .as_mut()
-            .expect("Started compiling a block with no compiler")
-            .scope_depth += 1
+        self.current_compiler_mut().scope_depth += 1
     }
 
     fn end_scope(&mut self) {
-        self.compiler
-            .as_mut()
-            .expect("Started compiling a block with no compiler")
-            .scope_depth -= 1;
+        self.current_compiler_mut().scope_depth -= 1;
 
-        while self.compiler.as_ref().unwrap().local_count > 0
-            && self.compiler.as_ref().unwrap().locals
-                [self.compiler.as_ref().unwrap().local_count - 1]
-                .depth
-                > self.compiler.as_ref().unwrap().scope_depth
+        while self.current_compiler().local_count > 0
+            && self.current_compiler().locals[self.current_compiler().local_count - 1].depth
+                > self.current_compiler().scope_depth
         {
             self.emit_byte(Op::POP as u8);
-            self.compiler.as_mut().unwrap().local_count -= 1;
+            self.current_compiler_mut().local_count -= 1;
         }
     }
 
@@ -656,14 +723,14 @@ impl<'a> Parser<'a> {
     }
 
     fn declare_variable(&mut self) {
-        if self.compiler.as_ref().unwrap().scope_depth == 0 {
+        if self.current_compiler().scope_depth == 0 {
             return;
         }
 
-        for i in (0..self.compiler.as_ref().unwrap().local_count).rev() {
-            let local = self.compiler.as_ref().unwrap().locals[i];
+        for i in (0..self.current_compiler().local_count).rev() {
+            let local = self.current_compiler().locals[i];
 
-            if local.depth != -1 && local.depth < self.compiler.as_ref().unwrap().scope_depth {
+            if local.depth != -1 && local.depth < self.current_compiler().scope_depth {
                 break;
             }
 
@@ -676,10 +743,7 @@ impl<'a> Parser<'a> {
     }
 
     fn add_local(&mut self, name: Token<'a>) {
-        let compiler = self
-            .compiler
-            .as_mut()
-            .expect("Started compiling a block with no compiler");
+        let compiler = self.current_compiler_mut();
 
         if compiler.local_count == 256 {
             self.error("Too many local variables in function");
@@ -693,9 +757,9 @@ impl<'a> Parser<'a> {
         compiler.locals[slot].depth = -1;
     }
 
-    fn resolve_local(&mut self, name: &str) -> Option<u8> {
-        for i in (0..self.compiler.as_ref().unwrap().local_count).rev() {
-            let local = self.compiler.as_ref().unwrap().locals[i];
+    fn resolve_local(&mut self, compiler_index: usize, name: &str) -> Option<u8> {
+        for i in (0..self.compilers[compiler_index].local_count).rev() {
+            let local = self.compilers[compiler_index].locals[i];
 
             if local.name.lexme == name {
                 if local.depth == -1 {
@@ -870,17 +934,7 @@ impl<'a> Parser<'a> {
     }
 
     fn function(&mut self, function: FunctionType) {
-        let mut compiler = Compiler::new(function, self.objects);
-
-        compiler.function.name = Some(StringObject::new(
-            self.previous.lexme,
-            &mut self.table,
-            self.objects,
-        ));
-
-        let mut compiler = Some(compiler);
-
-        std::mem::swap(&mut compiler, &mut self.compiler);
+        self.start_compiler(function);
 
         self.begin_scope();
 
@@ -889,7 +943,7 @@ impl<'a> Parser<'a> {
         if !self.check(TokenType::RightParen) {
             loop {
                 {
-                    let function = &mut self.compiler.as_mut().unwrap().function;
+                    let function = &mut self.current_compiler_mut().function;
 
                     function.arity += 1;
 
@@ -916,11 +970,14 @@ impl<'a> Parser<'a> {
 
         let function = self.end_compiler();
 
-        std::mem::swap(&mut compiler, &mut self.compiler);
+        let constant = self.make_constant(Value::object(function.clone().into()));
 
-        let constant = self.make_constant(Value::object(function.into()));
+        self.emit_bytes(Op::CLOSURE as u8, constant);
 
-        self.emit_bytes(Op::CLOSURE as u8, constant)
+        for i in 0..function.upvalue_count {
+            self.emit_byte(self.current_compiler().upvalues[i].is_local as u8);
+            self.emit_byte(self.current_compiler().upvalues[i].index)
+        }
     }
 
     fn call(&mut self) {
@@ -953,7 +1010,7 @@ impl<'a> Parser<'a> {
     }
 
     fn return_statement(&mut self) {
-        if self.compiler.as_ref().unwrap().compiler_type == FunctionType::Script {
+        if self.current_compiler().compiler_type == FunctionType::Script {
             self.error("Can't return from top-level code.")
         }
         if self.match_token(TokenType::SemiColon) {

@@ -33,6 +33,7 @@ pub struct FunctionObject<'a> {
     _obj: Object,
     pub arity: usize,
     pub chunk: Chunk,
+    pub upvalue_count: usize,
     pub name: Option<ObjectPtr<StringObject<'a>>>,
 }
 
@@ -151,6 +152,7 @@ impl<'a> FunctionObject<'a> {
         ObjectPtr::new(Box::into_raw(Box::new(Self {
             _obj: Object::new(ObjectType::Function, next),
             arity: 0,
+            upvalue_count: 0,
             chunk: Chunk::new(),
             name,
         })) as RawObject)

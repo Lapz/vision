@@ -78,13 +78,37 @@ impl Chunk {
                 Op::LOOP => self.jump_instruction("OP::LOOP", -1, offset),
                 Op::CALL => self.byte_instruction("OP::CALL", offset),
                 Op::CLOSURE => {
-                    let constant = self.code[offset + 1];
+                    let mut offset = offset + 1;
+
+                    let constant = self.code[offset];
+
+                    offset += 1;
+
                     print!("{:16}{:4} '", "OP_CLOSURE", constant);
                     print_value(self.constants[constant as usize]);
                     println!();
 
-                    offset + 2
+                    let function = self.constants[constant as usize].as_function();
+
+                    for _ in 0..function.upvalue_count {
+                        let is_local = self.code[offset];
+                        offset += 1;
+
+                        let index = self.code[offset];
+                        offset += 1;
+
+                        print!(
+                            "{:4}    |                     {} {}\n",
+                            offset - 2,
+                            if is_local == 1 { "local" } else { "upvalue" },
+                            index
+                        )
+                    }
+
+                    offset
                 }
+                Op::GET_UPVALUE => self.byte_instruction("OP::GET_UPVALUE", offset),
+                Op::SET_UPVALUE => self.byte_instruction("OP::SET_UPVALUE", offset),
                 _ => {
                     println!("Unknown opcode {}", instruction);
                     offset + 1

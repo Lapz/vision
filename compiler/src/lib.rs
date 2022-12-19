@@ -18,7 +18,7 @@ pub fn compile(input: &str) -> Option<(ObjectPtr<FunctionObject>, Table, RawObje
         parser.declaration();
     }
 
-    if parser.had_error {
+    if parser.had_error() {
         None
     } else {
         Some(parser.end())
