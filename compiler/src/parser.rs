@@ -627,17 +627,26 @@ impl<'a> Parser<'a> {
         let set_op;
 
         let arg = {
-            let arg = self.resolve_upvalue(self.current_compiler, name);
+            let arg = self.resolve_local(self.current_compiler, name);
 
-            if arg.is_none() {
-                println!("resolved {:?}", arg);
-                get_op = Op::GET_GLOBAL as u8;
-                set_op = Op::SET_GLOBAL as u8;
-                self.identifier_constant(name)
-            } else {
-                get_op = Op::GET_LOCAL as u8;
-                set_op = Op::SET_LOCAL as u8;
-                arg.unwrap()
+            match arg {
+                Some(arg) => {
+                    get_op = Op::GET_LOCAL as u8;
+                    set_op = Op::SET_LOCAL as u8;
+                    arg
+                }
+                None => match self.resolve_upvalue(self.current_compiler, name) {
+                    Some(arg) => {
+                        get_op = Op::GET_UPVALUE as u8;
+                        set_op = Op::SET_UPVALUE as u8;
+                        arg
+                    }
+                    None => {
+                        get_op = Op::GET_GLOBAL as u8;
+                        set_op = Op::SET_GLOBAL as u8;
+                        self.identifier_constant(name)
+                    }
+                },
             }
         };
 
@@ -653,7 +662,6 @@ impl<'a> Parser<'a> {
         // compiler->enclosing => compiler_index+1
 
         if compiler_index == 0 || self.compilers.get(compiler_index - 1).is_none() {
-            println!("here");
             return None;
         }
 

@@ -7,6 +7,7 @@ use crate::{chunk::Chunk, Table, Value};
 
 pub type NativeFn = fn(usize, *const Value) -> Value;
 pub type RawObject = *mut Object;
+pub type ValuePtr = *mut Value;
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[repr(C)]
 pub struct Object {
@@ -21,7 +22,14 @@ pub struct ObjectPtr<T: ?Sized + Debug> {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[repr(C)]
+pub struct UpValueObject {
+    _obj: Object,
+    pub location: ValuePtr,
+}
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[repr(C)]
 pub struct StringObject<'a> {
     _obj: Object,
     pub length: usize,
@@ -48,6 +56,8 @@ pub struct NativeObject {
 pub struct ClosureObject<'a> {
     pub obj: Object,
     pub function: ObjectPtr<FunctionObject<'a>>,
+    pub upvalues: Vec<Option<UpValueObject>>,
+    pub upvalue_count: usize,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -57,6 +67,7 @@ pub enum ObjectType {
     Function,
     Native,
     Closure,
+    UpValue,
 }
 
 impl Object {
@@ -173,11 +184,18 @@ impl NativeObject {
 
 impl<'a> ClosureObject<'a> {
     pub fn new(function: ObjectPtr<FunctionObject<'a>>) -> ObjectPtr<Self> {
+        let mut upvalues = Vec::new();
+
+        for i in 0..function.upvalue_count {
+            upvalues.push(None)
+        }
         ObjectPtr::new(Box::into_raw(Box::new(ClosureObject {
             obj: Object::new(
                 ObjectType::Closure,
                 std::ptr::null::<RawObject>() as RawObject,
             ),
+            upvalue_count: function.upvalue_count,
+            upvalues,
             function,
         })) as RawObject)
     }
@@ -241,6 +259,17 @@ impl<T: ?Sized + Debug> ObjectPtr<T> {
     }
 }
 
+impl<'a> UpValueObject {
+    pub fn new(location: ValuePtr) -> Self {
+        Self {
+            _obj: Object::new(
+                ObjectType::UpValue,
+                std::ptr::null::<RawObject>() as RawObject,
+            ),
+            location,
+        }
+    }
+}
 macro_rules! impl_object_traits {
     ($trait:ident) => {
         impl<'a> AsRef<$trait<'a>> for ObjectPtr<$trait<'a>> {
@@ -268,6 +297,12 @@ impl<T: Debug> Deref for ObjectPtr<T> {
 impl<'a> DerefMut for ObjectPtr<FunctionObject<'a>> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         unsafe { &mut *(self.ptr as *mut FunctionObject) }
+    }
+}
+
+impl<'a> DerefMut for ObjectPtr<ClosureObject<'a>> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        unsafe { &mut *(self.ptr as *mut ClosureObject) }
     }
 }
 

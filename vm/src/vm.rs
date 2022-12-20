@@ -4,7 +4,7 @@ use crate::{
     op::{self, Op},
     value::{Value, ValueType},
     ClosureObject, FunctionObject, NativeFn, NativeObject, ObjectPtr, ObjectType, RawObject,
-    StringObject, Table,
+    StringObject, Table, UpValueObject, ValuePtr,
 };
 use std::{fmt, result};
 pub const STACK_MAX: usize = FRAMES_MAX * (u8::BITS as usize);
@@ -66,7 +66,7 @@ macro_rules! read_byte {
         let temp = frame.ip;
         frame.ip += 1;
 
-        frame.function.chunk[temp]
+        frame.closure.function.chunk[temp]
     }};
 }
 
@@ -78,7 +78,8 @@ macro_rules! read_short {
 
         let temp = frame.ip;
 
-        (frame.function.chunk[temp - 2] as u16) << 8 | frame.function.chunk[temp - 1] as u16
+        (frame.closure.function.chunk[temp - 2] as u16) << 8
+            | frame.closure.function.chunk[temp - 1] as u16
     }};
 }
 
@@ -87,7 +88,7 @@ macro_rules! read_constant {
         let byte = read_byte!($vm) as usize;
         let frame = frame!($vm);
 
-        frame.function.chunk.constants[byte]
+        frame.closure.function.chunk.constants[byte]
     }};
 }
 
@@ -119,12 +120,12 @@ macro_rules! runtime_error {
         for i in (0..$self.frame_count).rev() {
             let frame = frame!($self,i);
             let instruction = frame.ip;
-            let line = frame.function.chunk.lines[instruction];
+            let line = frame.closure.function.chunk.lines[instruction];
             eprint!(" [line {}] in ", line);
-            if frame.function.name.is_none() {
+            if frame.closure.function.name.is_none() {
                 eprintln!("script");
             }else{
-                eprintln!("{}()",frame.function.name.unwrap().chars)
+                eprintln!("{}()",frame.closure.function.name.unwrap().chars)
             }
 
         }
@@ -178,7 +179,11 @@ impl<'a> VM<'a> {
                 {
                     let frame = frame!(self);
 
-                    frame.function.chunk.disassemble_instruction(frame.ip - 1);
+                    frame
+                        .closure
+                        .function
+                        .chunk
+                        .disassemble_instruction(frame.ip - 1);
                 }
             }
 
@@ -346,9 +351,78 @@ impl<'a> VM<'a> {
 
                     Op::CLOSURE => {
                         let function = read_constant!(self).as_function();
-                        let closure = ClosureObject::new(function);
+                        let mut closure = ClosureObject::new(function);
+
+                        println!(
+                            "before {} {:?}",
+                            frame!(self)
+                                .closure
+                                .function
+                                .name
+                                .map(|x| x.chars)
+                                .unwrap_or("<script>"),
+                            frame!(self).closure.upvalues
+                        );
+
+                        for i in 0..closure.upvalue_count {
+                            let is_local = read_byte!(self);
+                            let index = read_byte!(self);
+
+                            if is_local == 1 {
+                                let captured_value_index = frame!(self).slots + index as usize;
+
+                                let ptr = &mut self.stack[captured_value_index] as ValuePtr;
+                                closure.upvalues[i] = Some(self.capture_value(ptr));
+                            } else {
+                                let frame = frame!(self);
+                                closure.upvalues[i] = frame.closure.upvalues[index as usize]
+                            }
+                        }
+
+                        println!(
+                            "after {} {:?}",
+                            frame!(self)
+                                .closure
+                                .function
+                                .name
+                                .map(|x| x.chars)
+                                .unwrap_or("<script>"),
+                            frame!(self).closure.upvalues
+                        );
 
                         self.push(Value::object(closure.into()))
+                    }
+
+                    Op::GET_UPVALUE => {
+                        let slot = read_byte!(self);
+
+                        println!(
+                            "{} {:?}",
+                            frame!(self)
+                                .closure
+                                .function
+                                .name
+                                .map(|x| x.chars)
+                                .unwrap_or("<script>"),
+                            frame!(self).closure.upvalues
+                        );
+                        let ptr = frame!(self).closure.upvalues[slot as usize]
+                            .unwrap()
+                            .location;
+
+                        if ptr.is_null() {
+                            panic!("Tried dereferencing a null ptr")
+                        }
+
+                        self.push(*ptr);
+                    }
+                    Op::SET_UPVALUE => {
+                        let slot = read_byte!(self);
+                        let mut value = self.peek(0);
+
+                        frame_mut!(self).closure.upvalues[slot as usize]
+                            .unwrap()
+                            .location = &mut value as ValuePtr;
                     }
 
                     _ => {
@@ -413,9 +487,10 @@ impl<'a> VM<'a> {
     fn call_value(&mut self, callee: Value, arg_count: usize) -> bool {
         if callee.is_obj() {
             match callee.obj_type() {
-                ObjectType::String => {}
+                //we wrap all functions in ClosureObjects so the runtime will never try to invoke a bare FunctionObject anymore
+                ObjectType::String | ObjectType::UpValue | ObjectType::Function => {}
+
                 ObjectType::Closure => return self.call(callee.as_closure(), arg_count),
-                ObjectType::Function => {} //we wrap all functions in ClosureObjects so the runtime will never try to invoke a bare FunctionObject anymore
                 ObjectType::Native => {
                     let native = callee.as_native();
 
@@ -459,10 +534,14 @@ impl<'a> VM<'a> {
         }
 
         frame.ip = 0;
-        frame.function = callee.function.clone();
+        frame.closure = callee;
         frame.slots = self.stack_top - arg_count - 1 as usize;
 
         true
+    }
+
+    fn capture_value(&self, local: ValuePtr) -> UpValueObject {
+        UpValueObject::new(local)
     }
 }
 
@@ -482,6 +561,7 @@ pub fn print_object(value: Value) {
         ObjectType::Function => print_function(&value.as_function()),
         ObjectType::Native => print!("<native fn>"),
         ObjectType::Closure => print_function(&value.as_closure().function),
+        ObjectType::UpValue => print!("upvalue"),
     }
 }
 
