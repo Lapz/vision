@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    compiler::{Compiler, FunctionType},
+    compiler::{Compiler, FunctionType, UpValue},
     scanner::Scanner,
     token::{Token, TokenType},
 };
@@ -297,7 +297,7 @@ impl<'a> Parser<'a> {
         self.emit_bytes(Op::CONSTANT as u8, constant);
     }
 
-    pub fn start_compiler(&mut self, function: FunctionType) {
+    pub fn start_compiler(&mut self, function: FunctionType) -> usize {
         let mut compiler = Compiler::new(function, self.objects);
 
         compiler.function.name = Some(StringObject::new(
@@ -306,8 +306,10 @@ impl<'a> Parser<'a> {
             self.objects,
         ));
 
-        self.current_compiler += 1;
+        compiler.enclosing = Some(self.current_compiler);
         self.compilers.push(compiler);
+        self.current_compiler = self.compilers.len() - 1;
+        self.compilers.len() - 1
     }
 
     pub fn end_compiler(&mut self) -> ObjectPtr<FunctionObject<'a>> {
@@ -323,8 +325,7 @@ impl<'a> Parser<'a> {
             });
         }
 
-        self.compilers.pop();
-        self.current_compiler -= 1;
+        self.current_compiler = self.current_compiler().enclosing.unwrap();
 
         function
     }
@@ -626,9 +627,9 @@ impl<'a> Parser<'a> {
 
         let set_op;
 
-        let arg = {
-            let arg = self.resolve_local(self.current_compiler, name);
+        let arg = self.resolve_local(self.current_compiler, name);
 
+        let arg = {
             match arg {
                 Some(arg) => {
                     get_op = Op::GET_LOCAL as u8;
@@ -659,37 +660,36 @@ impl<'a> Parser<'a> {
     }
 
     fn resolve_upvalue(&mut self, compiler_index: usize, name: &str) -> Option<u8> {
-        // compiler->enclosing => compiler_index+1
-
-        if compiler_index == 0 || self.compilers.get(compiler_index - 1).is_none() {
+        if self.compilers[compiler_index].enclosing.is_none() {
             return None;
         }
 
-        let local = self.resolve_local(compiler_index, name);
+        let local = self.resolve_local(self.compilers[compiler_index].enclosing.unwrap(), name);
 
         if local.is_some() {
-            return Some(self.add_upvalue(compiler_index - 1, local.unwrap(), true));
+            return Some(self.add_upvalue(compiler_index, local.unwrap(), true));
         }
 
-        let upvalue = self.resolve_upvalue(compiler_index - 1, name);
+        let upvalue = self.resolve_upvalue(self.compilers[compiler_index].enclosing.unwrap(), name);
 
         if upvalue.is_some() {
-            return Some(self.add_upvalue(compiler_index - 1, upvalue.unwrap(), false));
+            return Some(self.add_upvalue(compiler_index, upvalue.unwrap(), false));
         }
 
         None
     }
 
     fn add_upvalue(&mut self, compiler_index: usize, local_index: u8, is_local: bool) -> u8 {
-        let compiler = &mut self.compilers[compiler_index];
-
-        let upvalue_count = compiler.function.upvalue_count;
+        let upvalue_count = self.compilers[compiler_index].function.upvalue_count;
 
         for i in 0..upvalue_count {
-            if compiler.upvalues[i].index == local_index
-                && compiler.upvalues[i].is_local == is_local
-            {
-                return i as u8;
+            match self.compilers[compiler_index].upvalues[i] {
+                Some(upvalue) => {
+                    if upvalue.index == local_index && upvalue.is_local == is_local {
+                        return i as u8;
+                    }
+                }
+                None => {}
             }
         }
 
@@ -698,10 +698,12 @@ impl<'a> Parser<'a> {
             return 0;
         }
 
-        compiler.upvalues[upvalue_count].is_local = is_local;
-        compiler.upvalues[upvalue_count].index = local_index;
+        self.compilers[compiler_index].upvalues[upvalue_count] = Some(UpValue {
+            index: local_index,
+            is_local,
+        });
 
-        compiler.function.upvalue_count += 1;
+        self.compilers[compiler_index].function.upvalue_count += 1;
 
         upvalue_count as u8
     }
@@ -942,7 +944,7 @@ impl<'a> Parser<'a> {
     }
 
     fn function(&mut self, function: FunctionType) {
-        self.start_compiler(function);
+        let compiler = self.start_compiler(function);
 
         self.begin_scope();
 
@@ -977,14 +979,19 @@ impl<'a> Parser<'a> {
         self.block();
 
         let function = self.end_compiler();
+        let upvalue_count = function.upvalue_count;
 
-        let constant = self.make_constant(Value::object(function.clone().into()));
+        let constant = self.make_constant(Value::object(function.into()));
 
         self.emit_bytes(Op::CLOSURE as u8, constant);
 
-        for i in 0..function.upvalue_count {
-            self.emit_byte(self.current_compiler().upvalues[i].is_local as u8);
-            self.emit_byte(self.current_compiler().upvalues[i].index)
+        for i in 0..upvalue_count {
+            self.emit_byte(if self.compilers[compiler].upvalues[i].unwrap().is_local {
+                1
+            } else {
+                0
+            });
+            self.emit_byte(self.compilers[compiler].upvalues[i].unwrap().index)
         }
     }
 

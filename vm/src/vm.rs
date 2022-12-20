@@ -353,17 +353,6 @@ impl<'a> VM<'a> {
                         let function = read_constant!(self).as_function();
                         let mut closure = ClosureObject::new(function);
 
-                        println!(
-                            "before {} {:?}",
-                            frame!(self)
-                                .closure
-                                .function
-                                .name
-                                .map(|x| x.chars)
-                                .unwrap_or("<script>"),
-                            frame!(self).closure.upvalues
-                        );
-
                         for i in 0..closure.upvalue_count {
                             let is_local = read_byte!(self);
                             let index = read_byte!(self);
@@ -379,33 +368,12 @@ impl<'a> VM<'a> {
                             }
                         }
 
-                        println!(
-                            "after {} {:?}",
-                            frame!(self)
-                                .closure
-                                .function
-                                .name
-                                .map(|x| x.chars)
-                                .unwrap_or("<script>"),
-                            frame!(self).closure.upvalues
-                        );
-
-                        self.push(Value::object(closure.into()))
+                        self.push(Value::object(closure.into()));
                     }
 
                     Op::GET_UPVALUE => {
                         let slot = read_byte!(self);
 
-                        println!(
-                            "{} {:?}",
-                            frame!(self)
-                                .closure
-                                .function
-                                .name
-                                .map(|x| x.chars)
-                                .unwrap_or("<script>"),
-                            frame!(self).closure.upvalues
-                        );
                         let ptr = frame!(self).closure.upvalues[slot as usize]
                             .unwrap()
                             .location;

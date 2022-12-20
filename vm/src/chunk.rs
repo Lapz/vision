@@ -3,7 +3,7 @@ use std::ops::Index;
 use crate::op::{self, Op};
 use crate::value::Value;
 use crate::vm::print_value;
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Chunk {
     pub code: Vec<u8>,
     pub constants: Vec<Value>,

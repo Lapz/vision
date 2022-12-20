@@ -1,4 +1,4 @@
-#[derive(Clone, Copy)]
+#[derive(Debug,Clone, Copy)]
 pub struct Token<'a> {
     pub ty: TokenType,
     pub lexme: &'a str,

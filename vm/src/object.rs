@@ -36,6 +36,7 @@ pub struct StringObject<'a> {
     pub chars: &'a str,
     pub hash: usize,
 }
+#[derive(PartialEq)]
 #[repr(C)]
 pub struct FunctionObject<'a> {
     _obj: Object,
@@ -331,6 +332,12 @@ impl<'a> Clone for ObjectPtr<FunctionObject<'a>> {
             ptr: self.ptr,
             tag: self.tag,
         }
+    }
+}
+
+impl<T: PartialEq + ?Sized + Debug> PartialEq for ObjectPtr<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.ptr == other.ptr && self.tag == other.tag
     }
 }
 

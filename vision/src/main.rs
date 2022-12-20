@@ -2,7 +2,7 @@ use compiler::compile;
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
-use std::{env, error::Error};
+use std::{env};
 use vm::{ClosureObject, Value, VM};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
