@@ -5,6 +5,7 @@ use vm::{FunctionObject, ObjectPtr, RawObject};
 pub struct Local<'a> {
     pub name: Token<'a>,
     pub depth: isize,
+    pub is_captured: bool,
 }
 #[derive(Debug, PartialEq, Eq)]
 pub enum FunctionType {
@@ -28,6 +29,7 @@ impl<'a> Default for Local<'a> {
                 line: 0,
             },
             depth: Default::default(),
+            is_captured: false,
         }
     }
 }

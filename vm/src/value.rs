@@ -2,7 +2,7 @@ use std::fmt::Debug;
 
 use crate::{
     object::{ObjectType, StringObject},
-    ClosureObject, FunctionObject, NativeObject, ObjectPtr, RawObject,
+    ClosureObject, FunctionObject, NativeObject, ObjectPtr, RawObject, ValuePtr,
 };
 
 #[derive(Clone, Copy)]
@@ -218,6 +218,11 @@ impl Value {
 
     pub fn is_obj_type(&self, ty: ObjectType) -> bool {
         self.is_obj() && self.obj_type() == ty
+    }
+
+    #[inline]
+    pub fn as_ptr(&self) -> ValuePtr {
+        self as ValuePtr
     }
 }
 

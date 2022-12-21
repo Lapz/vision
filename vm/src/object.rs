@@ -7,7 +7,8 @@ use crate::{chunk::Chunk, Table, Value};
 
 pub type NativeFn = fn(usize, *const Value) -> Value;
 pub type RawObject = *mut Object;
-pub type ValuePtr = *mut Value;
+pub type ValuePtr = *const Value;
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[repr(C)]
 pub struct Object {
@@ -25,7 +26,9 @@ pub struct ObjectPtr<T: ?Sized + Debug> {
 #[repr(C)]
 pub struct UpValueObject {
     _obj: Object,
-    pub location: ValuePtr,
+    pub location: Value,
+    pub next: ObjectPtr<UpValueObject>,
+    pub closed: Value,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -57,7 +60,7 @@ pub struct NativeObject {
 pub struct ClosureObject<'a> {
     pub obj: Object,
     pub function: ObjectPtr<FunctionObject<'a>>,
-    pub upvalues: Vec<Option<UpValueObject>>,
+    pub upvalues: Vec<Option<ObjectPtr<UpValueObject>>>,
     pub upvalue_count: usize,
 }
 
@@ -187,7 +190,7 @@ impl<'a> ClosureObject<'a> {
     pub fn new(function: ObjectPtr<FunctionObject<'a>>) -> ObjectPtr<Self> {
         let mut upvalues = Vec::new();
 
-        for i in 0..function.upvalue_count {
+        for _ in 0..function.upvalue_count {
             upvalues.push(None)
         }
         ObjectPtr::new(Box::into_raw(Box::new(ClosureObject {
@@ -260,15 +263,17 @@ impl<T: ?Sized + Debug> ObjectPtr<T> {
     }
 }
 
-impl<'a> UpValueObject {
-    pub fn new(location: ValuePtr) -> Self {
-        Self {
+impl UpValueObject {
+    pub fn new(location: Value) -> ObjectPtr<UpValueObject> {
+        ObjectPtr::new(Box::into_raw(Box::new(Self {
             _obj: Object::new(
                 ObjectType::UpValue,
                 std::ptr::null::<RawObject>() as RawObject,
             ),
             location,
-        }
+            next: ObjectPtr::null(),
+            closed: Value::nil(),
+        })) as RawObject)
     }
 }
 macro_rules! impl_object_traits {
@@ -304,6 +309,12 @@ impl<'a> DerefMut for ObjectPtr<FunctionObject<'a>> {
 impl<'a> DerefMut for ObjectPtr<ClosureObject<'a>> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         unsafe { &mut *(self.ptr as *mut ClosureObject) }
+    }
+}
+
+impl<'a> DerefMut for ObjectPtr<UpValueObject> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        unsafe { &mut *(self.ptr as *mut UpValueObject) }
     }
 }
 

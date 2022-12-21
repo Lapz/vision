@@ -1,8 +1,8 @@
 use compiler::compile;
+use std::env;
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
-use std::{env};
 use vm::{ClosureObject, Value, VM};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -67,4 +67,34 @@ fn run_file(path: &dyn AsRef<Path>) -> Result<(), Box<dyn std::error::Error>> {
     file.read_to_string(&mut buffer)?;
 
     interpret(&buffer)
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::interpret;
+
+    #[test]
+    fn it_works() {
+        interpret(
+            r#"
+        var globalSet;
+        var globalGet;
+
+        fun main() {
+        var a = "initial";
+
+        fun set() { a = "updated"; }
+        fun get() { print a; }
+
+        globalSet = set;
+        globalGet = get;
+        }
+
+        main();
+        globalSet();
+        globalGet();
+    "#,
+        )
+        .unwrap();
+    }
 }

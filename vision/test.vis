@@ -1,15 +1,24 @@
-fun outer() {
-  var a = 1;
-  var b = 2;
-  fun middle() {
-    var c = 3;
-    var d = 4;
-    fun inner() {
-      print a + c + b + d;
+var globalOne;
+var globalTwo;
+
+fun main() {
+  {
+    var a = "one";
+    fun one() {
+      print a;
     }
-    inner();
+    globalOne = one;
   }
-  middle();
+
+  {
+    var a = "two";
+    fun two() {
+      print a;
+    }
+    globalTwo = two;
+  }
 }
 
-outer();
+main();
+globalOne();
+globalTwo();

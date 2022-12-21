@@ -3,8 +3,7 @@ members=[
     "compiler",
     "vision",
     "vm"
-    # "parser",
-     
-    # "semant",
-    # "tox",
 ]
+
+[profile.release]
+debug = true

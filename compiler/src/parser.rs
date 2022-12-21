@@ -5,8 +5,8 @@ use crate::{
     scanner::Scanner,
     token::{Token, TokenType},
 };
+use vm::StringObject;
 use vm::{chunk::Chunk, op::Op, FunctionObject, ObjectPtr, RawObject, Table, Value};
-use vm::{op, StringObject};
 
 pub struct Parser<'a> {
     scanner: Scanner<'a>,
@@ -366,10 +366,13 @@ impl<'a> Parser<'a> {
 
         (function, self.table, self.objects)
     }
+
+    #[inline]
     pub fn current_chunk(&self) -> &Chunk {
         &self.current_compiler().function.chunk
     }
 
+    #[inline]
     pub fn current_chunk_mut(&mut self) -> &mut Chunk {
         &mut self.current_compiler_mut().function.chunk
     }
@@ -664,13 +667,16 @@ impl<'a> Parser<'a> {
             return None;
         }
 
-        let local = self.resolve_local(self.compilers[compiler_index].enclosing.unwrap(), name);
+        let enclosing = self.compilers[compiler_index].enclosing.unwrap();
+
+        let local = self.resolve_local(enclosing, name);
 
         if local.is_some() {
+            self.compilers[enclosing].locals[local.unwrap() as usize].is_captured = true;
             return Some(self.add_upvalue(compiler_index, local.unwrap(), true));
         }
 
-        let upvalue = self.resolve_upvalue(self.compilers[compiler_index].enclosing.unwrap(), name);
+        let upvalue = self.resolve_upvalue(enclosing, name);
 
         if upvalue.is_some() {
             return Some(self.add_upvalue(compiler_index, upvalue.unwrap(), false));
@@ -719,7 +725,12 @@ impl<'a> Parser<'a> {
             && self.current_compiler().locals[self.current_compiler().local_count - 1].depth
                 > self.current_compiler().scope_depth
         {
-            self.emit_byte(Op::POP as u8);
+            if self.current_compiler().locals[self.current_compiler().local_count - 1].is_captured {
+                self.emit_byte(Op::CLOSE_UPVALUE as u8);
+            } else {
+                self.emit_byte(Op::POP as u8);
+            }
+
             self.current_compiler_mut().local_count -= 1;
         }
     }

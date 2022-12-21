@@ -30,4 +30,5 @@ pub enum Op {
     CLOSURE = 25,
     GET_UPVALUE = 26,
     SET_UPVALUE = 27,
+    CLOSE_UPVALUE = 28,
 }

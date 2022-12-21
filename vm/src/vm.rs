@@ -1,12 +1,12 @@
 use crate::{
     frame::CallFrame,
     native::clock_native,
-    op::{self, Op},
+    op::Op,
     value::{Value, ValueType},
     ClosureObject, FunctionObject, NativeFn, NativeObject, ObjectPtr, ObjectType, RawObject,
     StringObject, Table, UpValueObject, ValuePtr,
 };
-use std::{fmt, result};
+use std::fmt::Display;
 pub const STACK_MAX: usize = FRAMES_MAX * (u8::BITS as usize);
 pub const FRAMES_MAX: usize = 64;
 
@@ -18,6 +18,7 @@ pub struct VM<'a> {
     objects: RawObject,
     strings: Table,
     globals: Table,
+    pub open_upvalues: ObjectPtr<UpValueObject>,
 }
 
 #[derive(Debug)]
@@ -26,8 +27,8 @@ pub enum Error {
     RuntimeError,
 }
 
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Error::CompileError(e) => write!(f, "Compile error: {}", e),
             Error::RuntimeError => write!(f, "Runtime error"),
@@ -152,6 +153,7 @@ impl<'a> VM<'a> {
             objects,
             strings,
             globals: Table::new(),
+            open_upvalues: ObjectPtr::null(),
         };
 
         vm.define_native("clock", clock_native);
@@ -194,6 +196,10 @@ impl<'a> VM<'a> {
 
                         let frame = frame!(self);
 
+                        let slot = frame.slots;
+
+                        self.close_upvalue(self.stack[slot].as_ptr());
+
                         self.frame_count -= 1;
 
                         if self.frame_count == 0 {
@@ -201,7 +207,7 @@ impl<'a> VM<'a> {
                             return Ok(());
                         }
 
-                        self.stack_top = frame.slots;
+                        self.stack_top = slot;
 
                         self.push(result);
                     }
@@ -296,6 +302,7 @@ impl<'a> VM<'a> {
                         let value = self.peek(0);
 
                         if self.globals.set(obj_ptr, value) {
+                            self.globals.delete(obj_ptr);
                             runtime_error!(self, "Undefined variable '{}'", as_str.chars);
                             return Err(Box::new(Error::RuntimeError));
                         }
@@ -360,8 +367,8 @@ impl<'a> VM<'a> {
                             if is_local == 1 {
                                 let captured_value_index = frame!(self).slots + index as usize;
 
-                                let ptr = &mut self.stack[captured_value_index] as ValuePtr;
-                                closure.upvalues[i] = Some(self.capture_value(ptr));
+                                closure.upvalues[i] =
+                                    Some(self.capture_value(self.stack[captured_value_index]));
                             } else {
                                 let frame = frame!(self);
                                 closure.upvalues[i] = frame.closure.upvalues[index as usize]
@@ -374,23 +381,26 @@ impl<'a> VM<'a> {
                     Op::GET_UPVALUE => {
                         let slot = read_byte!(self);
 
-                        let ptr = frame!(self).closure.upvalues[slot as usize]
+                        let value = frame!(self).closure.upvalues[slot as usize]
                             .unwrap()
                             .location;
 
-                        if ptr.is_null() {
-                            panic!("Tried dereferencing a null ptr")
-                        }
-
-                        self.push(*ptr);
+                        self.push(value);
                     }
+
                     Op::SET_UPVALUE => {
                         let slot = read_byte!(self);
-                        let mut value = self.peek(0);
+
+                        let value = self.peek(0);
 
                         frame_mut!(self).closure.upvalues[slot as usize]
                             .unwrap()
-                            .location = &mut value as ValuePtr;
+                            .location = value;
+                    }
+
+                    Op::CLOSE_UPVALUE => {
+                        self.close_upvalue(self.stack[self.stack_top - 1].as_ptr());
+                        self.pop();
                     }
 
                     _ => {
@@ -417,7 +427,7 @@ impl<'a> VM<'a> {
         self.stack_top = 0;
     }
 
-    fn peek(&self, distance: usize) -> Value {
+    const fn peek(&self, distance: usize) -> Value {
         self.stack[self.stack_top - 1 - distance as usize]
     }
 
@@ -508,8 +518,41 @@ impl<'a> VM<'a> {
         true
     }
 
-    fn capture_value(&self, local: ValuePtr) -> UpValueObject {
-        UpValueObject::new(local)
+    fn capture_value(&mut self, local: Value) -> ObjectPtr<UpValueObject> {
+        let mut prev_upvalue = ObjectPtr::null();
+        let mut upvalue = self.open_upvalues;
+
+        while !upvalue.is_null() && upvalue.location.as_ptr() > local.as_ptr() {
+            prev_upvalue = upvalue;
+            upvalue = upvalue.next;
+        }
+
+        if !upvalue.is_null() && upvalue.location == local {
+            return upvalue;
+        }
+
+        let mut created_up_value = UpValueObject::new(local);
+
+        created_up_value.next = upvalue;
+
+        if prev_upvalue.is_null() {
+            self.open_upvalues = created_up_value;
+        } else {
+            prev_upvalue.next = created_up_value
+        }
+
+        created_up_value
+    }
+
+    fn close_upvalue(&mut self, last: ValuePtr) {
+        while !self.open_upvalues.is_null() && self.open_upvalues.location.as_ptr() >= last {
+            let mut upvalue = self.open_upvalues;
+
+            upvalue.closed = upvalue.location;
+            upvalue.location = upvalue.closed;
+
+            self.open_upvalues = upvalue.next;
+        }
     }
 }
 
@@ -553,25 +596,25 @@ unsafe fn free_object(obj: RawObject) {
     }
 }
 
-impl<'a> Drop for VM<'a> {
-    fn drop(&mut self) {
-        let mut obj = self.objects;
+// impl<'a> Drop for VM<'a> {
+//     fn drop(&mut self) {
+//         let mut obj = self.objects;
 
-        while !obj.is_null() {
-            #[cfg(feature = "debug")]
-            {
-                print!("Freeing object ");
-                // print_object(Value::object(obj));
-                print!("\n");
-            }
+//         while !obj.is_null() {
+//             #[cfg(feature = "debug")]
+//             {
+//                 print!("Freeing object ");
+//                 // print_object(Value::object(obj));
+//                 print!("\n");
+//             }
 
-            unsafe {
-                let next = (&*obj).next;
+//             unsafe {
+//                 let next = (&*obj).next;
 
-                let _ = free_object(obj);
+//                 let _ = free_object(obj);
 
-                obj = next;
-            }
-        }
-    }
-}
+//                 obj = next;
+//             }
+//         }
+//     }
+// }

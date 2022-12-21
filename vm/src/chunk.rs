@@ -1,8 +1,9 @@
-use std::ops::Index;
-
+#[cfg(feature = "debug")]
 use crate::op::{self, Op};
 use crate::value::Value;
+#[cfg(feature = "debug")]
 use crate::vm::print_value;
+use std::ops::Index;
 #[derive(Debug, PartialEq)]
 pub struct Chunk {
     pub code: Vec<u8>,
@@ -29,6 +30,7 @@ impl Chunk {
         self.constants.len() - 1
     }
 
+    #[cfg(feature = "debug")]
     pub fn disassemble(&self, name: &str) {
         println!("== {} ==\n", name);
 
@@ -38,7 +40,7 @@ impl Chunk {
             i = self.disassemble_instruction(i);
         }
     }
-
+    #[cfg(feature = "debug")]
     pub fn disassemble_instruction(&self, offset: usize) -> usize {
         print!("{:04} ", offset);
 
@@ -109,6 +111,7 @@ impl Chunk {
                 }
                 Op::GET_UPVALUE => self.byte_instruction("OP::GET_UPVALUE", offset),
                 Op::SET_UPVALUE => self.byte_instruction("OP::SET_UPVALUE", offset),
+                Op::CLOSE_UPVALUE => self.simple_instruction("OP::CLOSE_UP_VALUE", offset),
                 _ => {
                     println!("Unknown opcode {}", instruction);
                     offset + 1
@@ -116,12 +119,12 @@ impl Chunk {
             }
         }
     }
-
+    #[cfg(feature = "debug")]
     fn simple_instruction(&self, name: &str, offset: usize) -> usize {
         println!("{}", name);
         offset + 1
     }
-
+    #[cfg(feature = "debug")]
     pub fn constant_instruction(&self, name: &str, offset: usize) -> usize {
         let constant = self.code[offset + 1];
         print!("{:16}{:4} '", name, constant);
@@ -129,13 +132,13 @@ impl Chunk {
         println!("'");
         offset + 2
     }
-
+    #[cfg(feature = "debug")]
     pub(crate) fn byte_instruction(&self, arg: &str, offset: usize) -> usize {
         let slot = self.code[offset + 1];
         println!("{:16}{:4} ", arg, slot);
         offset + 2
     }
-
+    #[cfg(feature = "debug")]
     pub(crate) fn jump_instruction(&self, arg: &str, sign: isize, offset: usize) -> usize {
         let mut jump = ((self.code[offset + 1] as u16) << 8) as usize;
         jump |= self.code[offset + 2] as usize;
