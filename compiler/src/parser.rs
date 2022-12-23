@@ -4,9 +4,10 @@ use crate::{
     compiler::{Compiler, FunctionType, UpValue},
     scanner::Scanner,
     token::{Token, TokenType},
+    ParseResult,
 };
-use vm::StringObject;
 use vm::{chunk::Chunk, op::Op, FunctionObject, ObjectPtr, RawObject, Table, Value};
+use vm::{Allocator, StringObject};
 
 pub struct Parser<'a> {
     scanner: Scanner<'a>,
@@ -15,10 +16,10 @@ pub struct Parser<'a> {
     had_error: bool,
     panic_mode: bool,
     rules: HashMap<TokenType, ParseRule<'a>>,
-    objects: RawObject,
     table: Table,
     compilers: Vec<Compiler<'a>>,
     current_compiler: usize,
+    allocator: Allocator,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
@@ -73,8 +74,13 @@ macro_rules! hashmap {
 impl<'a> Parser<'a> {
     pub fn new(scanner: Scanner<'a>) -> Parser<'a> {
         let objects = std::ptr::null::<RawObject>() as RawObject;
+
+        let mut allocator = Allocator::new();
+        let mut fn_object = allocator.alloc(|next| FunctionObject::new(None, next));
+
         Parser {
             scanner,
+
             previous: Token {
                 ty: TokenType::Eof,
                 lexme: "\0",
@@ -216,9 +222,9 @@ impl<'a> Parser<'a> {
                     TokenType::Error => ParseRule::default(),
                     TokenType::Eof => ParseRule::default(),
             },
-            objects,
             table: Table::new(),
-            compilers: vec![Compiler::new(FunctionType::Script, objects)],
+            allocator,
+            compilers: vec![Compiler::new(FunctionType::Script, fn_object)],
             current_compiler: 0,
         }
     }
@@ -298,13 +304,15 @@ impl<'a> Parser<'a> {
     }
 
     pub fn start_compiler(&mut self, function: FunctionType) -> usize {
-        let mut compiler = Compiler::new(function, self.objects);
+        let mut compiler = Compiler::new(
+            function,
+            self.allocator.alloc(|next| FunctionObject::new(None, next)),
+        );
 
-        compiler.function.name = Some(StringObject::new(
-            self.previous.lexme,
-            &mut self.table,
-            self.objects,
-        ));
+        compiler.function.name = Some(
+            self.allocator
+                .alloc(|next| StringObject::new(self.previous.lexme, &mut self.table, next)),
+        );
 
         compiler.enclosing = Some(self.current_compiler);
         self.compilers.push(compiler);
@@ -348,7 +356,7 @@ impl<'a> Parser<'a> {
         self.error_at_current(arg);
     }
 
-    pub fn end(mut self) -> (ObjectPtr<FunctionObject<'a>>, Table, RawObject) {
+    pub fn end(mut self) -> ParseResult<'a> {
         self.emit_return();
 
         #[cfg(feature = "debug")]
@@ -364,7 +372,11 @@ impl<'a> Parser<'a> {
 
         let function = self.current_compiler().function.clone();
 
-        (function, self.table, self.objects)
+        ParseResult {
+            function,
+            table: self.table,
+            allocator: self.allocator,
+        }
     }
 
     #[inline]
@@ -440,16 +452,15 @@ impl<'a> Parser<'a> {
     }
 
     pub fn string(&mut self, _can_assign: bool) {
-        let obj = Value::object(
+        let string_object = self.allocator.alloc(|next| {
             StringObject::new(
                 &self.previous.lexme[1..self.previous.lexme.len() - 1],
                 &mut self.table,
-                self.objects,
+                next,
             )
-            .into(),
-        );
+        });
 
-        self.objects = obj.as_obj();
+        let obj = Value::object(string_object.into());
 
         self.emit_constant(obj);
     }
@@ -617,7 +628,11 @@ impl<'a> Parser<'a> {
     }
 
     fn identifier_constant(&mut self, lexme: &str) -> u8 {
-        let val = Value::object(StringObject::new(lexme, &mut self.table, self.objects).into());
+        let string_object = self
+            .allocator
+            .alloc(|next| StringObject::new(lexme, &mut self.table, next));
+
+        let val = Value::object(string_object.into());
         self.make_constant(val)
     }
 

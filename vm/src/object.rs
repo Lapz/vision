@@ -175,29 +175,23 @@ impl<'a> FunctionObject<'a> {
 }
 
 impl NativeObject {
-    pub fn new(function: NativeFn) -> ObjectPtr<NativeObject> {
+    pub fn new(function: NativeFn, next: RawObject) -> ObjectPtr<NativeObject> {
         ObjectPtr::new(Box::into_raw(Box::new(NativeObject {
-            obj: Object::new(
-                ObjectType::Native,
-                std::ptr::null::<RawObject>() as RawObject,
-            ),
+            obj: Object::new(ObjectType::Native, next),
             function,
         })) as RawObject)
     }
 }
 
 impl<'a> ClosureObject<'a> {
-    pub fn new(function: ObjectPtr<FunctionObject<'a>>) -> ObjectPtr<Self> {
+    pub fn new(function: ObjectPtr<FunctionObject<'a>>, next: RawObject) -> ObjectPtr<Self> {
         let mut upvalues = Vec::new();
 
         for _ in 0..function.upvalue_count {
             upvalues.push(None)
         }
         ObjectPtr::new(Box::into_raw(Box::new(ClosureObject {
-            obj: Object::new(
-                ObjectType::Closure,
-                std::ptr::null::<RawObject>() as RawObject,
-            ),
+            obj: Object::new(ObjectType::Closure, next),
             upvalue_count: function.upvalue_count,
             upvalues,
             function,
@@ -210,6 +204,10 @@ impl<T: ?Sized + Debug> ObjectPtr<T> {
             ptr,
             tag: std::marker::PhantomData,
         }
+    }
+
+    pub fn raw(&self) -> RawObject {
+        self.ptr
     }
 
     pub fn null() -> ObjectPtr<T> {
@@ -299,11 +297,27 @@ macro_rules! impl_object_traits {
     };
 }
 
-impl<T: Debug> Deref for ObjectPtr<T> {
-    type Target = T;
+// impl<T: Debug> Deref for ObjectPtr<T> {
+//     type Target = T;
+
+//     fn deref(&self) -> &Self::Target {
+//         unsafe { &*(self.ptr as *const T) }
+//     }
+// }
+
+impl Deref for ObjectPtr<RawObject> {
+    type Target = RawObject;
 
     fn deref(&self) -> &Self::Target {
-        unsafe { &*(self.ptr as *const T) }
+        &self.ptr
+    }
+}
+
+impl<'a> Deref for ObjectPtr<FunctionObject<'a>> {
+    type Target = FunctionObject<'a>;
+
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*(self.ptr as *const FunctionObject<'a>) }
     }
 }
 
@@ -313,15 +327,47 @@ impl<'a> DerefMut for ObjectPtr<FunctionObject<'a>> {
     }
 }
 
+impl<'a> Deref for ObjectPtr<ClosureObject<'a>> {
+    type Target = ClosureObject<'a>;
+
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*(self.ptr as *const ClosureObject<'a>) }
+    }
+}
+
 impl<'a> DerefMut for ObjectPtr<ClosureObject<'a>> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         unsafe { &mut *(self.ptr as *mut ClosureObject) }
     }
 }
 
+impl Deref for ObjectPtr<UpValueObject> {
+    type Target = UpValueObject;
+
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*(self.ptr as *const UpValueObject) }
+    }
+}
+
 impl<'a> DerefMut for ObjectPtr<UpValueObject> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         unsafe { &mut *(self.ptr as *mut UpValueObject) }
+    }
+}
+
+impl<'a> Deref for ObjectPtr<StringObject<'a>> {
+    type Target = StringObject<'a>;
+
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*(self.ptr as *const StringObject<'a>) }
+    }
+}
+
+impl<'a> Deref for ObjectPtr<NativeObject> {
+    type Target = NativeObject;
+
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*(self.ptr as *const NativeObject) }
     }
 }
 

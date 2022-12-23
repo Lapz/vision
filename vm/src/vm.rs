@@ -3,8 +3,8 @@ use crate::{
     native::clock_native,
     op::Op,
     value::{Value, ValueType},
-    ClosureObject, FunctionObject, NativeFn, NativeObject, ObjectPtr, ObjectType, RawObject,
-    StringObject, Table, UpValueObject, ValuePtr,
+    Allocator, ClosureObject, FunctionObject, NativeFn, NativeObject, ObjectPtr, ObjectType,
+    RawObject, StringObject, Table, UpValueObject, ValuePtr,
 };
 use std::fmt::Display;
 pub const STACK_MAX: usize = FRAMES_MAX * (u8::BITS as usize);
@@ -15,10 +15,11 @@ pub struct VM<'a> {
     pub frames: Vec<CallFrame<'a>>,
     pub stack_top: usize,
     pub frame_count: usize,
-    objects: RawObject,
+
     strings: Table,
     globals: Table,
     pub open_upvalues: ObjectPtr<UpValueObject>,
+    pub allocator: Allocator,
 }
 
 #[derive(Debug)]
@@ -138,11 +139,11 @@ macro_rules! runtime_error {
 }
 
 impl<'a> VM<'a> {
-    pub fn new(strings: Table, objects: RawObject) -> Self {
+    pub fn new(strings: Table, mut allocator: Allocator) -> Self {
         let mut frames = Vec::new();
 
         for _ in 0..FRAMES_MAX {
-            frames.push(CallFrame::new())
+            frames.push(CallFrame::new(&mut allocator))
         }
 
         let mut vm = Self {
@@ -150,7 +151,7 @@ impl<'a> VM<'a> {
             frames,
             stack_top: 0,
             frame_count: 0,
-            objects,
+            allocator,
             strings,
             globals: Table::new(),
             open_upvalues: ObjectPtr::null(),
@@ -358,7 +359,9 @@ impl<'a> VM<'a> {
 
                     Op::CLOSURE => {
                         let function = read_constant!(self).as_function();
-                        let mut closure = ClosureObject::new(function);
+                        let mut closure = self
+                            .allocator
+                            .alloc(move |next| ClosureObject::new(function, next));
 
                         for i in 0..closure.upvalue_count {
                             let is_local = read_byte!(self);
@@ -426,10 +429,19 @@ impl<'a> VM<'a> {
     }
 
     fn define_native(&mut self, name: &str, fn_ptr: NativeFn) {
-        let name = Value::object(StringObject::new(name, &mut self.strings, self.objects).into());
+        let string_object = self
+            .allocator
+            .alloc(|next| StringObject::new(name, &mut self.strings, next));
+        let name = Value::object(string_object.into());
         self.push(name);
 
-        self.push(Value::object(NativeObject::new(fn_ptr).into()));
+        let native_object = Value::object(
+            self.allocator
+                .alloc(|next| NativeObject::new(fn_ptr, next))
+                .into(),
+        );
+
+        self.push(native_object);
 
         self.globals.set(name.as_obj(), self.stack[1]);
 
@@ -450,9 +462,11 @@ impl<'a> VM<'a> {
         new_string.push_str(&b.as_string().chars[0..b.as_string().chars.len() - 1]);
         new_string.push('\0');
 
-        let result = Value::object(
-            StringObject::from_owned(new_string, &mut self.strings, self.objects).into(),
-        );
+        let string_object = self
+            .allocator
+            .alloc(|next| StringObject::from_owned(new_string, &mut self.strings, next));
+
+        let result = Value::object(string_object.into());
         self.push(result);
     }
 
@@ -605,13 +619,13 @@ unsafe fn free_object(obj: RawObject) {
 
 impl<'a> Drop for VM<'a> {
     fn drop(&mut self) {
-        let mut obj = self.objects;
+        let mut obj = self.allocator.finish();
 
         while !obj.is_null() {
             #[cfg(feature = "debug")]
             {
                 print!("Freeing object ");
-                // print_object(Value::object(obj));
+                print_object(Value::object(ObjectPtr::new(obj)));
                 print!("\n");
             }
 

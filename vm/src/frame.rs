@@ -1,4 +1,4 @@
-use crate::{ClosureObject, FunctionObject, ObjectPtr, RawObject};
+use crate::{Allocator, ClosureObject, FunctionObject, ObjectPtr, RawObject};
 #[derive(Debug)]
 pub struct CallFrame<'a> {
     pub closure: ObjectPtr<ClosureObject<'a>>,
@@ -8,12 +8,12 @@ pub struct CallFrame<'a> {
 }
 
 impl<'a> CallFrame<'a> {
-    pub fn new() -> Self {
+    pub fn new(allocator: &mut Allocator) -> Self {
+        let fn_object = allocator.alloc(|next| FunctionObject::new(None, next));
+
+        let closure = allocator.alloc(move |next| ClosureObject::new(fn_object, next));
         Self {
-            closure: ClosureObject::new(FunctionObject::new(
-                None,
-                std::ptr::null::<RawObject>() as RawObject,
-            )),
+            closure,
             ip: 0,
             slots: 0,
         }

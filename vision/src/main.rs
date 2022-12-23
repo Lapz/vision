@@ -1,4 +1,4 @@
-use compiler::compile;
+use compiler::{compile, ParseResult};
 use std::env;
 use std::fs::File;
 use std::io::Read;
@@ -21,18 +21,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn interpret(src: &str) -> Result<(), Box<dyn std::error::Error>> {
-    let (function, table, object_list) = compile(src).ok_or("Compile error")?;
+    let ParseResult {
+        function,
+        mut allocator,
+        table,
+    } = compile(src).ok_or("Compile error")?;
 
     if function.is_null() {
         Err("Compile error".into())
     } else {
-        let mut vm = VM::new(table, object_list);
-
         let function_ptr = function.as_function();
 
-        vm.push(Value::object(function.as_ptr_obj()));
+        let closure = allocator.alloc(|next| ClosureObject::new(function_ptr, next));
 
-        let closure = ClosureObject::new(function_ptr);
+        let mut vm = VM::new(table, allocator);
+
+        vm.push(Value::object(function.as_ptr_obj()));
 
         vm.pop();
 

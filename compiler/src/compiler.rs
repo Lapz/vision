@@ -45,13 +45,13 @@ pub struct Compiler<'a> {
 }
 
 impl<'a> Compiler<'a> {
-    pub fn new(compiler_type: FunctionType, next: RawObject) -> Self {
+    pub fn new(compiler_type: FunctionType, function: ObjectPtr<FunctionObject<'a>>) -> Self {
         Self {
             locals: [Local::default(); 257],
             enclosing: None,
             local_count: 1,
             scope_depth: 0,
-            function: FunctionObject::new(None, next),
+            function,
             compiler_type,
             upvalues: [None; 257],
         }

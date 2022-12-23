@@ -4,11 +4,11 @@ mod scanner;
 mod token;
 
 use scanner::Scanner;
-use vm::{FunctionObject, ObjectPtr, RawObject, Table};
+use vm::{Allocator, FunctionObject, ObjectPtr, RawObject, Table};
 
 use crate::token::TokenType;
 
-pub fn compile(input: &str) -> Option<(ObjectPtr<FunctionObject>, Table, RawObject)> {
+pub fn compile(input: &str) -> Option<ParseResult> {
     let scanner = Scanner::new(input);
     let mut parser = parser::Parser::new(scanner);
 
@@ -23,4 +23,10 @@ pub fn compile(input: &str) -> Option<(ObjectPtr<FunctionObject>, Table, RawObje
     } else {
         Some(parser.end())
     }
+}
+
+pub struct ParseResult<'a> {
+    pub table: Table,
+    pub allocator: Allocator,
+    pub function: ObjectPtr<FunctionObject<'a>>,
 }

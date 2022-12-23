@@ -16,22 +16,22 @@ impl Debug for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Value")
             .field("ty", &self.ty)
-            .field(
-                "repr",
+            .field("repr", {
                 &match self.ty {
-                    ValueType::Bool => self.as_bool_ref() as &dyn Debug,
-                    ValueType::Nil => &"nil" as &dyn Debug,
-
-                    ValueType::Number => self.as_number_ref() as &dyn Debug,
+                    ValueType::Bool => self.as_bool_ref().to_string(),
+                    ValueType::Nil => "nil".to_string(),
+                    ValueType::Number => self.as_number_ref().to_string(),
                     ValueType::Object => match self.obj_type() {
-                        ObjectType::String => &"<string>" as &dyn Debug,
-                        ObjectType::Function => &"<fn> " as &dyn Debug,
-                        ObjectType::Native => &"<native fn>" as &dyn Debug,
-                        ObjectType::Closure => &"<closure fn>" as &dyn Debug,
-                        ObjectType::UpValue => &"upvalue" as &dyn Debug,
+                        ObjectType::String => {
+                            format!("{:?}", self.as_string().chars)
+                        }
+                        ObjectType::Function => "<fn> ".to_string(),
+                        ObjectType::Native => "<native fn>".to_string(),
+                        ObjectType::Closure => "<closure fn>".to_string(),
+                        ObjectType::UpValue => "upvalue".to_string(),
                     },
-                },
-            )
+                }
+            })
             .finish()
     }
 }
