@@ -73,10 +73,8 @@ macro_rules! hashmap {
 
 impl<'a> Parser<'a> {
     pub fn new(scanner: Scanner<'a>) -> Parser<'a> {
-        let objects = std::ptr::null::<RawObject>() as RawObject;
-
         let mut allocator = Allocator::new();
-        let mut fn_object = allocator.alloc(|next| FunctionObject::new(None, next));
+        let fn_object = allocator.alloc(|next| FunctionObject::new(None, next));
 
         Parser {
             scanner,
@@ -221,6 +219,13 @@ impl<'a> Parser<'a> {
                     TokenType::While => ParseRule::default(),
                     TokenType::Error => ParseRule::default(),
                     TokenType::Eof => ParseRule::default(),
+                    TokenType::QuestionMark => ParseRule {
+                        prefix: None,
+                        infix: Some(Parser::ternary),
+                        precedence: Precedence::Assignment
+                    },
+                    TokenType::Colon => ParseRule::default(),
+
             },
             table: Table::new(),
             allocator,
@@ -854,6 +859,22 @@ impl<'a> Parser<'a> {
         self.parse_with_precedence(Precedence::And);
 
         self.patch_jump(end_jump)
+    }
+
+    pub fn ternary(&mut self) {
+        let then_jump = self.emit_jump(Op::JUMP_IF_FALSE as u8);
+
+        self.expression();
+
+        let else_jump = self.emit_jump(Op::JUMP as u8);
+
+        self.patch_jump(then_jump);
+
+        self.consume(TokenType::Colon, "Expect ':' after ternary expression ");
+
+        self.expression();
+
+        self.patch_jump(else_jump);
     }
 
     fn or(&mut self) {

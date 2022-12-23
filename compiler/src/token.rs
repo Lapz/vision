@@ -1,4 +1,4 @@
-#[derive(Debug,Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct Token<'a> {
     pub ty: TokenType,
     pub lexme: &'a str,
@@ -48,4 +48,6 @@ pub enum TokenType {
     While,
     Error,
     Eof,
+    QuestionMark,
+    Colon,
 }

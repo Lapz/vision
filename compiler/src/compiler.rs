@@ -1,6 +1,6 @@
 use crate::token::{Token, TokenType};
 use std::fmt::Debug;
-use vm::{FunctionObject, ObjectPtr, RawObject};
+use vm::{FunctionObject, ObjectPtr};
 #[derive(Debug, Clone, Copy)]
 pub struct Local<'a> {
     pub name: Token<'a>,

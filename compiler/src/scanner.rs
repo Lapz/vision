@@ -53,6 +53,8 @@ impl<'a> Scanner<'a> {
                 "+" => self.make_token(TokenType::Plus),
                 "/" => self.make_token(TokenType::Slash),
                 "*" => self.make_token(TokenType::Star),
+                "?" => self.make_token(TokenType::QuestionMark),
+                ":" => self.make_token(TokenType::Colon),
                 "!" => matches!(self, "=", TokenType::BangEqual, TokenType::Bang),
                 "=" => matches!(self, "=", TokenType::EqualEqual, TokenType::Equal),
                 "<" => matches!(self, "=", TokenType::LessEqual, TokenType::Less),
