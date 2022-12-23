@@ -24,7 +24,7 @@ impl Debug for Value {
 
                     ValueType::Number => self.as_number_ref() as &dyn Debug,
                     ValueType::Object => match self.obj_type() {
-                        ObjectType::String => self.as_string() as &dyn Debug,
+                        ObjectType::String => &"<string>" as &dyn Debug,
                         ObjectType::Function => &"<fn> " as &dyn Debug,
                         ObjectType::Native => &"<native fn>" as &dyn Debug,
                         ObjectType::Closure => &"<closure fn>" as &dyn Debug,
@@ -131,35 +131,83 @@ impl Value {
 
     #[inline]
     pub fn as_obj(&self) -> RawObject {
-        debug_assert_eq!(
-            self.ty,
-            ValueType::Object,
-            "Value is type `{:?}` instead of {:?}",
-            self.ty,
-            ValueType::Object
-        );
         unsafe { self.repr.object.as_ptr() }
     }
 
     #[inline]
-    pub fn as_string<'a>(&self) -> &StringObject<'a> {
-        let ptr = self.as_obj();
-        unsafe { &*(ptr as *const StringObject<'a>) }
+    pub fn as_string<'a>(&self) -> ObjectPtr<StringObject<'a>> {
+        #[cfg(debug_assertions)]
+        {
+            let repr = self.as_obj();
+
+            let ty = unsafe { (*repr).ty };
+
+            debug_assert_eq!(
+                ObjectType::String,
+                ty,
+                "Value is type `{:?}` instead of {:?}",
+                ty,
+                ObjectType::String,
+            );
+        }
+        unsafe { self.repr.object.cast() }
     }
 
     #[inline]
     pub fn as_function<'a>(&self) -> ObjectPtr<FunctionObject<'a>> {
-        unsafe { self.repr.object.as_function() }
+        #[cfg(debug_assertions)]
+        {
+            let repr = self.as_obj();
+
+            let ty = unsafe { (*repr).ty };
+
+            debug_assert_eq!(
+                ObjectType::Function,
+                ty,
+                "Value is type `{:?}` instead of {:?}",
+                ty,
+                ObjectType::Function,
+            );
+        }
+        unsafe { self.repr.object.cast() }
     }
 
     #[inline]
     pub fn as_native(&self) -> ObjectPtr<NativeObject> {
-        unsafe { self.repr.object.as_native() }
+        #[cfg(debug_assertions)]
+        {
+            let repr = self.as_obj();
+
+            let ty = unsafe { (*repr).ty };
+
+            debug_assert_eq!(
+                ObjectType::Native,
+                ty,
+                "Value is type `{:?}` instead of {:?}",
+                ty,
+                ObjectType::Native
+            );
+        }
+        unsafe { self.repr.object.cast() }
     }
 
     #[inline]
     pub fn as_closure<'a>(&self) -> ObjectPtr<ClosureObject<'a>> {
-        unsafe { self.repr.object.as_closure() }
+        #[cfg(debug_assertions)]
+        {
+            let repr = self.as_obj();
+
+            let ty = unsafe { (*repr).ty };
+
+            debug_assert_eq!(
+                ObjectType::Closure,
+                ty,
+                "Value is type `{:?}` instead of {:?}",
+                ty,
+                ObjectType::Closure,
+            );
+        }
+        unsafe { self.repr.object.cast() }
     }
 
     #[inline]

@@ -7,8 +7,8 @@ mod table;
 mod value;
 mod vm;
 pub use {
+    crate::vm::{Error, VM},
     object::*,
     table::*,
     value::Value,
-    vm::{Error, VM},
 };

@@ -402,12 +402,6 @@ impl<'a> VM<'a> {
                         self.close_upvalue(self.stack[self.stack_top - 1].as_ptr());
                         self.pop();
                     }
-
-                    _ => {
-                        runtime_error!(self, "Unknown opcode");
-
-                        return Err(Box::new(Error::RuntimeError));
-                    }
                 }
             }
         }
@@ -590,31 +584,44 @@ fn print_function(function: &FunctionObject) {
 unsafe fn free_object(obj: RawObject) {
     let obj_obj = &*(obj);
     match obj_obj.ty {
-        _ => {
-            let _ = Box::from_raw(obj);
+        ObjectType::String => {
+            // let str_object: &StringObject = &*();
+            let _ = Box::from_raw(obj as *mut StringObject);
+        }
+        ObjectType::Function => {
+            let _ = Box::from_raw(obj as *mut FunctionObject);
+        }
+        ObjectType::Native => {
+            let _ = Box::from_raw(obj as *mut NativeObject);
+        }
+        ObjectType::Closure => {
+            let _ = Box::from_raw(obj as *mut ClosureObject);
+        }
+        ObjectType::UpValue => {
+            let _ = Box::from_raw(obj as *mut UpValueObject);
         }
     }
 }
 
-// impl<'a> Drop for VM<'a> {
-//     fn drop(&mut self) {
-//         let mut obj = self.objects;
+impl<'a> Drop for VM<'a> {
+    fn drop(&mut self) {
+        let mut obj = self.objects;
 
-//         while !obj.is_null() {
-//             #[cfg(feature = "debug")]
-//             {
-//                 print!("Freeing object ");
-//                 // print_object(Value::object(obj));
-//                 print!("\n");
-//             }
+        while !obj.is_null() {
+            #[cfg(feature = "debug")]
+            {
+                print!("Freeing object ");
+                // print_object(Value::object(obj));
+                print!("\n");
+            }
 
-//             unsafe {
-//                 let next = (&*obj).next;
+            unsafe {
+                let next = (&*obj).next;
 
-//                 let _ = free_object(obj);
+                let _ = free_object(obj);
 
-//                 obj = next;
-//             }
-//         }
-//     }
-// }
+                obj = next;
+            }
+        }
+    }
+}

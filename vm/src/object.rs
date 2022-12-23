@@ -254,6 +254,13 @@ impl<T: ?Sized + Debug> ObjectPtr<T> {
         ObjectPtr::new(self.ptr)
     }
 
+    pub fn cast<C: ?Sized + Debug>(&self) -> ObjectPtr<C> {
+        ObjectPtr {
+            ptr: self.ptr,
+            tag: std::marker::PhantomData,
+        }
+    }
+
     pub fn take<'a, V: Sized>(self) -> &'a V {
         unsafe { &*(self.ptr as *const V) }
     }
