@@ -32,9 +32,14 @@ macro_rules! hashmap {
 }
 
 impl<'a> Parser<'a> {
-    fn get_rule(&self, ty: Token) -> ParseRule<'a> {
-        println!("{:?}", ty);
+    pub(crate) fn get_rule(&self, ty: Token) -> ParseRule<'a> {
         self.rules[&ty]
+    }
+
+    pub(crate) fn error(&self, msg: &str) -> Spanned<Expression> {
+        println!("{}", msg);
+
+        Spanned::new(Expression::Error, self.prev.span())
     }
 
     pub fn match_token(&mut self, ty: Token) -> bool {
@@ -79,29 +84,29 @@ impl<'a> Parser<'a> {
 
         let can_assign = precedence <= Precedence::Assignment;
 
-        match prefix_rule {
-            Some(prefix_rule) => return prefix_rule(self, can_assign),
+        let mut expr = match prefix_rule {
+            Some(prefix_rule) => prefix_rule(self, can_assign),
             None => {
                 // @TODO error
-                // self.error("Expect expression.");
+                self.error("Expect expression.")
             }
-        }
+        };
 
         while precedence <= self.get_rule(*self.current.value()).precedence {
             self.advance();
 
             let infix_rule = self.get_rule(*self.prev.value()).infix;
 
-            match infix_rule {
-                Some(infix_rule) => return infix_rule(self),
+            expr = match infix_rule {
+                Some(infix_rule) => infix_rule(self, expr),
                 None => {
                     // @TODO error
-                    // self.error("Expect expression.");
+                    self.error("Expect expression.")
                 }
-            }
+            };
         }
 
-        todo!()
+        expr
     }
 
     pub(crate) fn get_unary_op(&mut self) -> Spanned<UnaryOp> {
@@ -127,6 +132,7 @@ impl<'a> Parser<'a> {
             Token::Minus => BinaryOp::Minus,
             Token::Star => BinaryOp::Star,
             Token::Slash => BinaryOp::Slash,
+            Token::Equal => BinaryOp::Equal,
             _ => unreachable!(),
         };
 

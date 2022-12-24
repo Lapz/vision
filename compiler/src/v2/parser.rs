@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::hashmap;
 
 use super::lexer::Lexer;
-use ast::prelude::{Expression, Interner, LiteralId, Position, Span, Spanned, Token};
+use ast::prelude::{Expression, Interner, LiteralId, Position, Span, Spanned, SymbolId, Token};
 pub struct Parser<'a> {
     pub(crate) src: &'a str,
     pub(crate) lexer: Lexer<'a>,
@@ -12,7 +12,7 @@ pub struct Parser<'a> {
     pub(crate) current: Spanned<Token>,
     pub(crate) prev: Spanned<Token>,
     pub(crate) rules: HashMap<Token, ParseRule<'a>>,
-    pub(crate) literals: Interner<&'a str, LiteralId>,
+    pub(crate) symbols: Interner<&'a str, SymbolId>,
 }
 
 #[derive(Clone, Copy)]
@@ -53,7 +53,7 @@ impl<'a> Parser<'a> {
                 Token::Eof,
                 Span::new(Position::new(1, 1, 0), Position::new(1, 1, 0)),
             ),
-            literals: Interner::new(),
+            symbols: Interner::new(),
             rules: hashmap! {
                 Token::LeftParen => ParseRule {
                         prefix: Some(Parser::grouping),
@@ -89,12 +89,12 @@ impl<'a> Parser<'a> {
                 Token::SemiColon => ParseRule::default(),
                 Token::Minus=> ParseRule {
                         prefix: Some(Parser::unary),
-                        infix:None,// Some(Parser::binary),
+                        infix:Some(Parser::binary),
                         precedence: Precedence::Term,
                  },
                 Token::Plus => ParseRule {
                     prefix: Some(Parser::unary),
-                    infix: None,// Some(Parser::binary),
+                    infix: Some(Parser::binary),
                     precedence: Precedence::Term,
                 },
                 Token::Slash => ParseRule {
@@ -104,15 +104,87 @@ impl<'a> Parser<'a> {
                 },
                 Token::Star => ParseRule {
                     prefix: None,
-                    infix: None,// Some(Parser::binary),
+                    infix: Some(Parser::binary),
                     precedence: Precedence::Factor,
                 },
                 Token::Bang => ParseRule {
                     prefix: Some(Parser::unary),
                     infix: None,
                     precedence: Precedence::None
-                }
-
+                },
+                Token::BangEqual => ParseRule {
+                        prefix: None,
+                        infix: Some(Parser::binary),
+                        precedence: Precedence::Equality,
+                },
+                Token::Equal => ParseRule::default(),
+                Token::EqualEqual => ParseRule {
+                    prefix: None,
+                    infix: Some(Parser::binary),
+                    precedence: Precedence::Equality,
+                },
+                Token::Greater => ParseRule {
+                    prefix: None,
+                    infix: Some(Parser::binary),
+                    precedence: Precedence::Comparison,
+                },
+                Token::GreaterEqual => ParseRule {
+                    prefix: None,
+                    infix: Some(Parser::binary),
+                    precedence: Precedence::Comparison,
+                },
+                Token::Less => ParseRule {
+                    prefix: None,
+                    infix: Some(Parser::binary),
+                    precedence: Precedence::Comparison,
+                },
+                Token::LessEqual => ParseRule {
+                    prefix: None,
+                    infix: Some(Parser::binary),
+                    precedence: Precedence::Comparison,
+                },
+                Token::And => ParseRule {
+                    prefix: None,
+                    infix: Some(Parser::binary),
+                    precedence: Precedence::And,
+                },
+                Token::Or =>  ParseRule {
+                    prefix: None,
+                    infix: Some(Parser::binary),
+                    precedence: Precedence::Or,
+                },
+                Token::QuestionMark => ParseRule {
+                    prefix: None,
+                    infix: Some(Parser::ternary),
+                    precedence: Precedence::Assignment
+                },
+                Token::Identifier => ParseRule {
+                    prefix: Some(Parser::identifier),
+                    infix: None,
+                    precedence: Precedence::None,
+                },
+                Token::Eof => ParseRule::default(),
+                Token::Var => ParseRule::default(),
+                Token::While => ParseRule::default(),
+                Token::Error => ParseRule::default(),
+                Token::Print => ParseRule::default(),
+                Token::Return => ParseRule::default(),
+                Token::Super => ParseRule::default(),
+                Token::This => ParseRule::default(),
+                Token::For => ParseRule::default(),
+                Token::Fun => ParseRule::default(),
+                Token::If => ParseRule::default(),
+                Token::Class => ParseRule::default(),
+                Token::Else => ParseRule::default(),
+                Token::Equal => ParseRule {
+                    prefix: None,
+                    infix: Some(Parser::binary),
+                    precedence: Precedence::Assignment,
+                },
+                Token::LeftBrace => ParseRule::default(),
+                Token::RightBrace => ParseRule::default(),
+                Token::Comma => ParseRule::default(),
+                Token::Dot => ParseRule::default(),
             },
         };
 
@@ -177,7 +249,7 @@ impl<'a> Parser<'a> {
 }
 
 impl Precedence {
-    fn higher(&self) -> Precedence {
+    pub(crate) fn higher(&self) -> Precedence {
         match *self {
             Precedence::None | Precedence::Assignment => Precedence::Or,
             Precedence::Or => Precedence::And,

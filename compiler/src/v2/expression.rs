@@ -33,14 +33,52 @@ impl<'a> Parser<'a> {
         )
     }
 
-    pub(crate) fn ternary(&mut self, _can_assign: bool) -> Spanned<Expression> {
-        todo!()
+    pub(crate) fn identifier(&mut self, _can_assign: bool) -> Spanned<Expression> {
+        let span = self.prev.span();
+        let id = self
+            .symbols
+            .intern(&self.src[span.start.absolute..span.end.absolute]);
+
+        Spanned::new(Expression::Identifier(id), span)
     }
 
-    pub(crate) fn binary(&mut self) -> Spanned<Expression> {
+    pub(crate) fn ternary(&mut self, cond: Spanned<Expression>) -> Spanned<Expression> {
+        let lhs = self.expression();
+
+        self.consume(Token::Colon, "Expect ':' after ternary expression");
+
+        let rhs = self.expression();
+
+        let start = cond.span();
+        let end = rhs.span();
+
+        Spanned::new(
+            Expression::Ternary {
+                cond: Box::new(cond),
+                lhs: Box::new(lhs),
+                rhs: Box::new(rhs),
+            },
+            start.merge(end),
+        )
+    }
+
+    pub(crate) fn binary(&mut self, lhs: Spanned<Expression>) -> Spanned<Expression> {
         let op = self.get_binary_op();
 
-        todo!()
+        let rule = self.get_rule(*self.prev.value());
+        let expr = self.parse_with_precedence(rule.precedence.higher());
+
+        let start = lhs.span();
+
+        let end = expr.span();
+        Spanned::new(
+            Expression::Binary {
+                op,
+                lhs: Box::new(lhs),
+                rhs: Box::new(expr),
+            },
+            start.merge(end),
+        )
     }
 
     pub(crate) fn grouping(&mut self, _can_assign: bool) -> Spanned<Expression> {
@@ -50,7 +88,6 @@ impl<'a> Parser<'a> {
 
         let start = expr.span();
         let end = self.consume_get_span(Token::SemiColon, "Expected ';' after expression.");
-
         Spanned::new(Expression::Grouping(Box::new(expr)), start.merge(end))
     }
 

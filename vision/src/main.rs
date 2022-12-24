@@ -8,13 +8,13 @@ use std::path::Path;
 use vm::{ClosureObject, Value, VM};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let args = env::args().collect::<Vec<String>>();
+    // let args = env::args().collect::<Vec<String>>();
 
-    let src = "-10;+20;!true";
+    let src = "10+10;a+10; -2*3+46; a = 10; a = b = c = d;";
     let mut parser = compiler::v2::Parser::new(src);
 
     while !parser.match_token(Token::Eof) {
-        println!("{:#?}", parser.expression_statement());
+        println!("{}", parser.expression_statement());
     }
 
     // if args.len() == 1 {
