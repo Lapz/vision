@@ -5,8 +5,6 @@ pub struct Scanner<'a> {
     lookahead: Option<Position>,
     start: Position,
     end: Position,
-    lexing_interpolation: bool,
-    interpolation_count: usize,
 }
 
 macro_rules! matches {
@@ -27,8 +25,6 @@ impl<'a> Scanner<'a> {
             lookahead: Some(Position::new(1, 1, 0)),
             start: Position::new(1, 1, 0),
             end: Position::new(1, 1, 0),
-            lexing_interpolation: false,
-            interpolation_count: 0,
         }
     }
 
@@ -45,19 +41,8 @@ impl<'a> Scanner<'a> {
             Some((start, ch)) => match ch {
                 "(" => self.make_token(Token::LeftParen),
                 ")" => self.make_token(Token::RightParen),
-                "{" => {
-                    if self.lexing_interpolation {
-                        self.interpolation_count += 1;
-                    }
-                    self.make_token(Token::LeftBrace)
-                }
-                "}" => {
-                    if self.lexing_interpolation {
-                        self.interpolation_count -= 1;
-                    };
-
-                    self.make_token(Token::RightBrace)
-                }
+                "{" => self.make_token(Token::LeftBrace),
+                "}" => self.make_token(Token::RightBrace),
                 "," => self.make_token(Token::Comma),
                 "." => self.make_token(Token::Dot),
                 "-" => self.make_token(Token::Minus),
