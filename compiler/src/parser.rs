@@ -78,7 +78,6 @@ impl<'a> Parser<'a> {
 
         Parser {
             scanner,
-
             previous: Token {
                 ty: TokenType::Eof,
                 lexme: "\0",

@@ -1,24 +1,5 @@
-var globalOne;
-var globalTwo;
+var a = 100;
+var b = 100;
 
-fun main() {
-  {
-    var a = "one";
-    fun one() {
-      print a;
-    }
-    globalOne = one;
-  }
 
-  {
-    var a = "two";
-    fun two() {
-      print a;
-    }
-    globalTwo = two;
-  }
-}
-
-main();
-globalOne();
-globalTwo();
+print a-100 > b ? "wow" : "non";

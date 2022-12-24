@@ -16,7 +16,6 @@ impl Allocator {
         &mut self,
         init_obj: F,
     ) -> ObjectPtr<T> {
-        println!("{:}", line!());
         let allocated_obj = init_obj(self.root);
 
         self.root = allocated_obj.raw();

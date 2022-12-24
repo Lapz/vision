@@ -184,7 +184,8 @@ impl NativeObject {
 }
 
 impl<'a> ClosureObject<'a> {
-    pub fn new(function: ObjectPtr<FunctionObject<'a>>, next: RawObject) -> ObjectPtr<Self> {
+    pub fn 
+    new(function: ObjectPtr<FunctionObject<'a>>, next: RawObject) -> ObjectPtr<Self> {
         let mut upvalues = Vec::new();
 
         for _ in 0..function.upvalue_count {

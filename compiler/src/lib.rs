@@ -4,7 +4,7 @@ mod scanner;
 mod token;
 
 use scanner::Scanner;
-use vm::{Allocator, FunctionObject, ObjectPtr, RawObject, Table};
+use vm::{Allocator, FunctionObject, ObjectPtr, Table};
 
 use crate::token::TokenType;
 
