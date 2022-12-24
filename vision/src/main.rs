@@ -1,4 +1,6 @@
+use ast::prelude::Token;
 use compiler::{compile, ParseResult};
+
 use std::env;
 use std::fs::File;
 use std::io::Read;
@@ -8,17 +10,11 @@ use vm::{ClosureObject, Value, VM};
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = env::args().collect::<Vec<String>>();
 
-    let src = " \"Tea will be ready in ${foo} minutes\" and";
-    let mut scanner = compiler::v2::Scanner::new(src);
+    let src = "-10;+20;!true";
+    let mut parser = compiler::v2::Parser::new(src);
 
-    while !scanner.is_at_end() {
-        let token = scanner.next_token();
-
-        if token.value() == &ast::prelude::Token::Eof {
-            break;
-        } else {
-            println!("{:?} {:#?}", token.value(), token.view(src))
-        }
+    while !parser.match_token(Token::Eof) {
+        println!("{:#?}", parser.expression_statement());
     }
 
     // if args.len() == 1 {

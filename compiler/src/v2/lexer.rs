@@ -1,33 +1,24 @@
+use super::parser::Parser;
+use crate::matches;
+
 use ast::prelude::{Position, Span, Spanned, Token};
 
-pub struct Scanner<'a> {
-    src: &'a str,
-    lookahead: Option<Position>,
-    start: Position,
-    end: Position,
+pub struct Lexer<'a> {
+    pub(crate) src: &'a str,
+    pub(crate) lookahead: Option<Position>,
+    pub(crate) start: Position,
+    pub(crate) end: Position,
 }
 
-macro_rules! matches {
-    ($scanner:ident,$char:literal,$lhs:path,$rhs:path) => {{
-        if $scanner.matches($char) {
-            $scanner.make_token($lhs)
-        } else {
-            $scanner.make_token($rhs)
-        }
-    }};
-}
-
-impl<'a> Scanner<'a> {
-    pub fn new(src: &'a str) -> Scanner {
-        Scanner {
+impl<'a> Lexer<'a> {
+    pub fn new(src: &'a str) -> Self {
+        Self {
             src,
-
             lookahead: Some(Position::new(1, 1, 0)),
             start: Position::new(1, 1, 0),
             end: Position::new(1, 1, 0),
         }
     }
-
     pub fn next_token(&mut self) -> Spanned<Token> {
         self.skip_whitespace();
 
@@ -51,6 +42,7 @@ impl<'a> Scanner<'a> {
                 "*" => self.make_token(Token::Star),
                 "?" => self.make_token(Token::QuestionMark),
                 ":" => self.make_token(Token::Colon),
+                ";" => self.make_token(Token::SemiColon),
                 "!" => matches!(self, "=", Token::BangEqual, Token::Bang),
                 "=" => matches!(self, "=", Token::EqualEqual, Token::Equal),
                 "<" => matches!(self, "=", Token::LessEqual, Token::Less),

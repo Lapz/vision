@@ -1,5 +1,6 @@
 use std::{
     borrow::{Borrow, BorrowMut},
+    cmp,
     ops::{Deref, DerefMut},
 };
 
@@ -12,6 +13,25 @@ pub struct Spanned<T> {
 impl<T> Spanned<T> {
     pub fn new(value: T, span: Span) -> Self {
         Spanned { span, value }
+    }
+
+    pub fn span(&self) -> Span {
+        self.span
+    }
+
+    pub fn into_value(self) -> T {
+        self.value
+    }
+
+    pub fn merge_span(self, other: &Self) -> Self {
+        Spanned {
+            value: self.value,
+            span: Span::new(self.span.start, other.span.end),
+        }
+    }
+
+    pub fn extend(&mut self, other: Span) {
+        self.span.end = cmp::max(self.span.end, other.end)
     }
 
     pub fn value(&self) -> &T {
@@ -59,6 +79,13 @@ pub struct Span {
 impl Span {
     pub fn new(start: Position, end: Position) -> Self {
         Self { start, end }
+    }
+
+    pub fn merge(&self, other: Span) -> Span {
+        Self {
+            start: cmp::min(self.start, other.start),
+            end: cmp::max(self.end, other.end),
+        }
     }
 }
 #[derive(Debug, Copy, PartialOrd, Clone, PartialEq, Eq, Ord)]
