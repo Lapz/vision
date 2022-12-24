@@ -41,6 +41,12 @@ pub enum BinaryOp {
     Minus,
     Slash,
     Star,
+    BangEqual,
+    EqualEqual,
+    Greater,
+    GreaterEqual,
+    Less,
+    LessEqual,
 }
 #[derive(Debug)]
 pub enum UnaryOp {

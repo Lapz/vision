@@ -1,4 +1,4 @@
-use ast::prelude::{Expression, Span, Spanned, Token, UnaryOp};
+use ast::prelude::{BinaryOp, Expression, Span, Spanned, Token, UnaryOp};
 
 use super::parser::{ParseRule, Parser, Precedence};
 
@@ -109,6 +109,24 @@ impl<'a> Parser<'a> {
             Token::Bang => UnaryOp::Bang,
             Token::Plus => UnaryOp::Plus,
             Token::Minus => UnaryOp::Minus,
+            _ => unreachable!(),
+        };
+
+        Spanned::new(op, self.prev.span())
+    }
+
+    pub(crate) fn get_binary_op(&mut self) -> Spanned<BinaryOp> {
+        let op = match *self.prev.value() {
+            Token::BangEqual => BinaryOp::BangEqual,
+            Token::EqualEqual => BinaryOp::EqualEqual,
+            Token::Greater => BinaryOp::Greater,
+            Token::GreaterEqual => BinaryOp::GreaterEqual,
+            Token::Less => BinaryOp::Less,
+            Token::LessEqual => BinaryOp::LessEqual,
+            Token::Plus => BinaryOp::Plus,
+            Token::Minus => BinaryOp::Minus,
+            Token::Star => BinaryOp::Star,
+            Token::Slash => BinaryOp::Slash,
             _ => unreachable!(),
         };
 

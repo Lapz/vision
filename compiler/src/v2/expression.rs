@@ -37,6 +37,12 @@ impl<'a> Parser<'a> {
         todo!()
     }
 
+    pub(crate) fn binary(&mut self) -> Spanned<Expression> {
+        let op = self.get_binary_op();
+
+        todo!()
+    }
+
     pub(crate) fn grouping(&mut self, _can_assign: bool) -> Spanned<Expression> {
         let expr = self.expression();
 

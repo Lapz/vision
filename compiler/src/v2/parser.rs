@@ -18,7 +18,7 @@ pub struct Parser<'a> {
 #[derive(Clone, Copy)]
 pub struct ParseRule<'a> {
     pub(crate) prefix: Option<fn(&mut Parser<'a>, bool) -> Spanned<Expression>>,
-    pub(crate) infix: Option<fn(&mut Parser<'a>) -> Spanned<Expression>>,
+    pub(crate) infix: Option<fn(&mut Parser<'a>, Spanned<Expression>) -> Spanned<Expression>>,
     pub(crate) precedence: Precedence,
 }
 
