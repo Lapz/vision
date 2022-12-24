@@ -10,6 +10,7 @@ version = "0.1.0"
 name = "compiler"
 version = "0.1.0"
 dependencies = [
+ "ast",
  "vm",
 ]
 
@@ -17,6 +18,7 @@ dependencies = [
 name = "vision"
 version = "0.1.0"
 dependencies = [
+ "ast",
  "compiler",
  "vm",
 ]

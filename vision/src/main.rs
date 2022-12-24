@@ -8,14 +8,27 @@ use vm::{ClosureObject, Value, VM};
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = env::args().collect::<Vec<String>>();
 
-    if args.len() == 1 {
-        repl()?;
-    } else if args.len() == 2 {
-        run_file(&args[1])?;
-    } else {
-        println!("Usage: vision [script]");
-        std::process::exit(64);
+    let src = " \"Tea will be ready in ${foo} minutes\" and";
+    let mut scanner = compiler::v2::Scanner::new(src);
+
+    while !scanner.is_at_end() {
+        let token = scanner.next_token();
+
+        if token.value() == &ast::prelude::Token::Eof {
+            break;
+        } else {
+            println!("{:?} {:#?}", token.value(), token.view(src))
+        }
     }
+
+    // if args.len() == 1 {
+    //     repl()?;
+    // } else if args.len() == 2 {
+    //     run_file(&args[1])?;
+    // } else {
+    //     println!("Usage: vision [script]");
+    //     std::process::exit(64);
+    // }
 
     Ok(())
 }
