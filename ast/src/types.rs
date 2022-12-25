@@ -1,5 +1,5 @@
 use crate::intern::SymbolId;
-
+#[derive(Debug)]
 pub enum Type {
     /// number, float, string etc
     Identifier(SymbolId),

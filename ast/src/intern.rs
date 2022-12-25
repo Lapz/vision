@@ -2,6 +2,7 @@ use std::{
     borrow::Borrow,
     cell::RefCell,
     collections::HashMap,
+    fmt::Display,
     hash::Hash,
     marker::PhantomData,
     ops::{Deref, Index},
@@ -14,6 +15,12 @@ pub struct SymbolId(u32);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct LiteralId(u32);
+
+impl Display for SymbolId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "${}", self.0)
+    }
+}
 
 pub trait InternId: Copy + Clone {
     fn id(index: u32) -> Self;

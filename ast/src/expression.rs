@@ -115,7 +115,7 @@ impl Display for Expression {
             Expression::Ternary { cond, lhs, rhs } => {
                 write!(f, "{} ? {} : {}", cond, lhs, rhs)
             }
-            Expression::Identifier(ident) => write!(f, "$"),
+            Expression::Identifier(ident) => write!(f, "{}", ident),
             Expression::Binary { op, lhs, rhs } => write!(f, "{} {} {}", lhs, op, rhs),
             Expression::Grouping(expr) => write!(f, "({})", expr),
             Expression::Call { callee, args } => todo!(),

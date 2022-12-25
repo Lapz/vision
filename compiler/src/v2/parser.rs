@@ -17,7 +17,7 @@ pub struct Parser<'a> {
 
 #[derive(Clone, Copy)]
 pub struct ParseRule<'a> {
-    pub(crate) prefix: Option<fn(&mut Parser<'a>, bool) -> Spanned<Expression>>,
+    pub(crate) prefix: Option<fn(&mut Parser<'a>) -> Spanned<Expression>>,
     pub(crate) infix: Option<fn(&mut Parser<'a>, Spanned<Expression>) -> Spanned<Expression>>,
     pub(crate) precedence: Precedence,
 }
@@ -185,6 +185,7 @@ impl<'a> Parser<'a> {
                 Token::RightBrace => ParseRule::default(),
                 Token::Comma => ParseRule::default(),
                 Token::Dot => ParseRule::default(),
+                Token::Colon => ParseRule::default(),
             },
         };
 
@@ -214,8 +215,6 @@ impl<'a> Parser<'a> {
             self.fn_declaration()
         } else if self.match_token(Token::Trait) {
             self.trait_declaration()
-        } else {
-            self.statement();
         }
 
         if self.panic_mode {

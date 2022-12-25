@@ -10,11 +10,11 @@ use vm::{ClosureObject, Value, VM};
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // let args = env::args().collect::<Vec<String>>();
 
-    let src = "10+10;a+10; -2*3+46; a = 10; a = b = c = d;";
+    let src = "10+10;a+10; -2*3+46; a := 10; a := b := c := d; let a := 10+46;";
     let mut parser = compiler::v2::Parser::new(src);
 
     while !parser.match_token(Token::Eof) {
-        println!("{}", parser.expression_statement());
+        println!("{}", parser.statement());
     }
 
     // if args.len() == 1 {

@@ -73,7 +73,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn check(&self, ty: Token) -> bool {
+    pub(crate) fn check(&self, ty: Token) -> bool {
         self.current.value() == &ty
     }
 
@@ -82,10 +82,8 @@ impl<'a> Parser<'a> {
 
         let prefix_rule = self.get_rule(*self.prev.value()).prefix;
 
-        let can_assign = precedence <= Precedence::Assignment;
-
         let mut expr = match prefix_rule {
-            Some(prefix_rule) => prefix_rule(self, can_assign),
+            Some(prefix_rule) => prefix_rule(self),
             None => {
                 // @TODO error
                 self.error("Expect expression.")

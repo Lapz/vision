@@ -2,7 +2,7 @@ use super::{parser::Precedence, Parser};
 use ast::prelude::{Expression, Literal, Spanned, Statement, Token};
 
 impl<'a> Parser<'a> {
-    pub fn expression_statement(&mut self) -> Spanned<Statement> {
+    pub(crate) fn expression_statement(&mut self) -> Spanned<Statement> {
         let expr = self.expression();
 
         let end = self.consume_get_span(Token::SemiColon, "Expected ';' after expression.");
@@ -16,7 +16,7 @@ impl<'a> Parser<'a> {
         self.parse_with_precedence(Precedence::Assignment)
     }
 
-    pub(crate) fn unary(&mut self, _can_assign: bool) -> Spanned<Expression> {
+    pub(crate) fn unary(&mut self) -> Spanned<Expression> {
         let op = self.get_unary_op();
 
         let rhs = self.parse_with_precedence(Precedence::Unary);
@@ -33,7 +33,7 @@ impl<'a> Parser<'a> {
         )
     }
 
-    pub(crate) fn identifier(&mut self, _can_assign: bool) -> Spanned<Expression> {
+    pub(crate) fn identifier(&mut self) -> Spanned<Expression> {
         let span = self.prev.span();
         let id = self
             .symbols
@@ -81,7 +81,7 @@ impl<'a> Parser<'a> {
         )
     }
 
-    pub(crate) fn grouping(&mut self, _can_assign: bool) -> Spanned<Expression> {
+    pub(crate) fn grouping(&mut self) -> Spanned<Expression> {
         let expr = self.expression();
 
         self.consume(Token::RightParen, "Expect ')' after expression.");
@@ -91,7 +91,7 @@ impl<'a> Parser<'a> {
         Spanned::new(Expression::Grouping(Box::new(expr)), start.merge(end))
     }
 
-    pub(crate) fn literal(&mut self, _can_assign: bool) -> Spanned<Expression> {
+    pub(crate) fn literal(&mut self) -> Spanned<Expression> {
         let literal = match *self.prev.value() {
             Token::Number => Literal::Number,
             Token::True => Literal::Bool(true),

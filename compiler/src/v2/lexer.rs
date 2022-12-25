@@ -41,10 +41,16 @@ impl<'a> Lexer<'a> {
                 "/" => self.make_token(Token::Slash),
                 "*" => self.make_token(Token::Star),
                 "?" => self.make_token(Token::QuestionMark),
-                ":" => self.make_token(Token::Colon),
+                ":" => matches!(self, "=", Token::Equal, Token::Colon),
                 ";" => self.make_token(Token::SemiColon),
                 "!" => matches!(self, "=", Token::BangEqual, Token::Bang),
-                "=" => matches!(self, "=", Token::EqualEqual, Token::Equal),
+                "=" => {
+                    if self.matches("=") {
+                        self.make_token(Token::EqualEqual)
+                    } else {
+                        self.make_token(Token::Equal)
+                    }
+                }
                 "<" => matches!(self, "=", Token::LessEqual, Token::Less),
                 ">" => matches!(self, "=", Token::GreaterEqual, Token::Greater),
                 "$" => self.make_token(Token::Dollar),
@@ -239,7 +245,7 @@ impl<'a> Lexer<'a> {
                     match self.src.get(start.absolute + 1..start.absolute + 2) {
                         Some("a") => self.check_keyword(start.shift("a"), 3, "lse", Token::False),
                         Some("o") => self.check_keyword(start.shift("o"), 1, "r", Token::For),
-                        Some("u") => self.check_keyword(start.shift("u"), 1, "n", Token::Fun),
+                        Some("n") => Token::Fun,
                         _ => Token::Identifier,
                     }
                 } else {
@@ -278,7 +284,7 @@ impl<'a> Lexer<'a> {
                     Token::Identifier
                 }
             }
-            Some("v") => self.check_keyword(start, 2, "ar", Token::Var),
+            Some("l") => self.check_keyword(start, 2, "et", Token::Var),
             Some("w") => self.check_keyword(start, 4, "hile", Token::While),
             _ => Token::Identifier,
         }
