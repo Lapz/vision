@@ -4,7 +4,7 @@ pub enum Token {
     RightBracket,
     LeftParen,
     RightParen,
-
+    Assignment,
     LeftBrace,
     RightBrace,
     Comma,

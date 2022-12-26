@@ -4,7 +4,8 @@ members=[
     "vision",
     "syntax",
     "vm",
-    "ast"
+    "ast",
+    "errors"
 ]
 
 [profile.release]

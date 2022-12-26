@@ -14,10 +14,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "errors"
+version = "0.1.0"
+dependencies = [
+ "ast",
+]
+
+[[package]]
 name = "syntax"
 version = "0.1.0"
 dependencies = [
  "ast",
+ "errors",
 ]
 
 [[package]]

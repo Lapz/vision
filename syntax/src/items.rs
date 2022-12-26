@@ -81,7 +81,7 @@ impl<'a> Parser<'a> {
             .symbols
             .intern(&self.src[self.prev.span().start.absolute..self.prev.span().end.absolute]);
 
-        self.consume(Token::Equal, "Expected `:=`");
+        self.consume(Token::Equal, "Expected `=`");
 
         let ty = self.parse_type();
 
@@ -103,7 +103,7 @@ impl<'a> Parser<'a> {
             ty = Some(self.parse_type());
         }
 
-        self.consume(Token::Equal, "`const` variables must be initialized");
+        self.consume(Token::Assignment, "Expected `:=`");
 
         let initializer = self.expression();
 
@@ -318,7 +318,7 @@ impl<'a> Parser<'a> {
         let ty = None;
         let mut init = None;
 
-        if self.match_token(Token::Equal) {
+        if self.match_token(Token::Assignment) {
             init = Some(self.expression());
         };
 

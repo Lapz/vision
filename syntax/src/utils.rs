@@ -37,11 +37,26 @@ impl<'a> Parser<'a> {
     }
 
     pub(crate) fn error(&mut self, msg: &str) -> Spanned<Expression> {
-        println!("{}", msg);
-
         self.panic_mode = true;
         self.had_error = true;
+        self.reporter.error(msg, self.prev.span());
+
         Spanned::new(Expression::Error, self.prev.span())
+    }
+
+    pub(crate) fn error_at_current(&mut self, lexme: &str) {
+        self.error_at(lexme, self.current.span());
+    }
+
+    fn error_at(&mut self, msg: &str, span: Span) {
+        if self.panic_mode {
+            return;
+        }
+        self.panic_mode = true;
+
+        self.reporter.error(msg, span);
+
+        self.had_error = true;
     }
 
     pub fn match_token(&mut self, ty: Token) -> bool {
@@ -54,13 +69,11 @@ impl<'a> Parser<'a> {
     }
 
     pub(crate) fn consume(&mut self, ty: Token, arg: &str) {
-        if *self.current.value() == ty {
-            self.advance();
-            return;
+        if *self.current.value() != ty {
+            self.error_at_current(arg);
         }
 
-        // @TODO error
-        // self.error_at_current(arg);
+        self.advance();
     }
 
     pub(crate) fn consume_get_span(&mut self, ty: Token, arg: &str) -> Span {
@@ -69,8 +82,7 @@ impl<'a> Parser<'a> {
 
             self.prev.span()
         } else {
-            // @TODO error
-            // self.error_at_current(arg);
+            self.error_at_current(arg);
             self.current.span()
         }
     }
@@ -86,10 +98,7 @@ impl<'a> Parser<'a> {
 
         let mut expr = match prefix_rule {
             Some(prefix_rule) => prefix_rule(self),
-            None => {
-                // @TODO error
-                self.error("Expect expression.")
-            }
+            None => self.error("Expect expression."),
         };
 
         while precedence <= self.get_rule(*self.current.value()).precedence {
@@ -99,10 +108,7 @@ impl<'a> Parser<'a> {
 
             expr = match infix_rule {
                 Some(infix_rule) => infix_rule(self, expr),
-                None => {
-                    // @TODO error
-                    self.error("Expect expression.")
-                }
+                None => self.error("Expect expression."),
             };
         }
 
@@ -132,7 +138,7 @@ impl<'a> Parser<'a> {
             Token::Minus => BinaryOp::Minus,
             Token::Star => BinaryOp::Star,
             Token::Slash => BinaryOp::Slash,
-            Token::Equal => BinaryOp::Equal,
+            Token::Assignment => BinaryOp::Assignment,
             _ => unreachable!(),
         };
 

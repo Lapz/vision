@@ -1,4 +1,3 @@
-use ast::prelude::Token;
 use compiler::{compile, ParseResult};
 use syntax::Parser;
 

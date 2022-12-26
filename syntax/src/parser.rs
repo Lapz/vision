@@ -6,6 +6,7 @@ use super::lexer::Lexer;
 use ast::prelude::{
     Expression, Interner, LiteralId, Position, Program, Span, Spanned, SymbolId, Token,
 };
+use errors::Reporter;
 pub struct Parser<'a> {
     pub(crate) src: &'a str,
     pub(crate) lexer: Lexer<'a>,
@@ -13,6 +14,7 @@ pub struct Parser<'a> {
     pub(crate) panic_mode: bool,
     pub(crate) current: Spanned<Token>,
     pub(crate) prev: Spanned<Token>,
+    pub(crate) reporter: Reporter,
     pub(crate) rules: HashMap<Token, ParseRule<'a>>,
     pub(crate) symbols: Interner<&'a str, SymbolId>,
 }
@@ -43,6 +45,7 @@ pub enum Precedence {
 impl<'a> Parser<'a> {
     pub fn new(src: &'a str) -> Parser {
         let mut parser = Parser {
+            reporter: Reporter::new(),
             src,
             lexer: Lexer::new(src),
             had_error: false,
@@ -178,11 +181,12 @@ impl<'a> Parser<'a> {
                 Token::If => ParseRule::default(),
                 Token::Class => ParseRule::default(),
                 Token::Else => ParseRule::default(),
-                Token::Equal => ParseRule {
+                Token::Assignment => ParseRule {
                     prefix: None,
                     infix: Some(Parser::binary),
                     precedence: Precedence::Assignment,
                 },
+                Token::Equal => ParseRule::default(),
                 Token::LeftBrace => ParseRule::default(),
                 Token::RightBrace => ParseRule::default(),
                 Token::Comma => ParseRule::default(),
@@ -208,7 +212,7 @@ impl<'a> Parser<'a> {
                 break;
             }
 
-            // @TODO error reporting
+            self.error_at_current("Unexpected token")
         }
     }
 
@@ -229,6 +233,8 @@ impl<'a> Parser<'a> {
 
             self.synchronize();
         }
+
+        self.reporter.emit(self.src);
 
         if self.had_error {
             None

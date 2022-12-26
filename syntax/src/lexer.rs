@@ -40,7 +40,7 @@ impl<'a> Lexer<'a> {
                 "/" => self.make_token(Token::Slash),
                 "*" => self.make_token(Token::Star),
                 "?" => self.make_token(Token::QuestionMark),
-                ":" => matches!(self, "=", Token::Equal, Token::Colon),
+                ":" => matches!(self, "=", Token::Assignment, Token::Colon),
                 ";" => self.make_token(Token::SemiColon),
                 "!" => matches!(self, "=", Token::BangEqual, Token::Bang),
                 "=" => {

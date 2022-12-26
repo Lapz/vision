@@ -43,13 +43,13 @@ pub enum BinaryOp {
     Minus,
     Slash,
     Star,
-    Equal,
     BangEqual,
     EqualEqual,
     Greater,
     GreaterEqual,
     Less,
     LessEqual,
+    Assignment,
 }
 #[derive(Debug)]
 pub enum UnaryOp {
@@ -90,7 +90,7 @@ impl Display for BinaryOp {
             BinaryOp::Minus => write!(f, "-"),
             BinaryOp::Slash => write!(f, "/"),
             BinaryOp::Star => write!(f, "*"),
-            BinaryOp::Equal => write!(f, "="),
+            BinaryOp::Assignment => write!(f, ":="),
             BinaryOp::BangEqual => write!(f, "!="),
             BinaryOp::EqualEqual => write!(f, "=="),
             BinaryOp::Greater => write!(f, ">"),
