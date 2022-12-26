@@ -1,5 +1,6 @@
 use ast::prelude::Token;
 use compiler::{compile, ParseResult};
+use syntax::Parser;
 
 use std::env;
 use std::fs::File;
@@ -8,23 +9,16 @@ use std::path::Path;
 use vm::{ClosureObject, Value, VM};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // let args = env::args().collect::<Vec<String>>();
+    let args = env::args().collect::<Vec<String>>();
 
-    let src = "10+10;a+10; -2*3+46; a := 10; a := b := c := d; let a := 10+46;";
-    let mut parser = compiler::v2::Parser::new(src);
-
-    while !parser.match_token(Token::Eof) {
-        println!("{}", parser.statement());
+    if args.len() == 1 {
+        repl()?;
+    } else if args.len() == 2 {
+        run_file(&args[1])?;
+    } else {
+        println!("Usage: vision [script]");
+        std::process::exit(64);
     }
-
-    // if args.len() == 1 {
-    //     repl()?;
-    // } else if args.len() == 2 {
-    //     run_file(&args[1])?;
-    // } else {
-    //     println!("Usage: vision [script]");
-    //     std::process::exit(64);
-    // }
 
     Ok(())
 }
@@ -79,7 +73,16 @@ fn run_file(path: &dyn AsRef<Path>) -> Result<(), Box<dyn std::error::Error>> {
 
     file.read_to_string(&mut buffer)?;
 
-    interpret(&buffer)
+    let mut parser = Parser::new(&buffer);
+
+    match parser.parse() {
+        Some(program) => {
+            println!("{:#?}", program);
+        }
+        None => {}
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]

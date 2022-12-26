@@ -40,7 +40,15 @@ impl Display for Statement {
             Statement::Expression(expr) => write!(f, "{};", expr),
             Statement::While { cond, body } => todo!(),
             Statement::Return(_) => todo!(),
-            Statement::Block(_) => todo!(),
+            Statement::Block(block) => {
+                writeln!(f, "{{")?;
+
+                for stmt in block {
+                    writeln!(f, "{:>4}", stmt)?;
+                }
+
+                writeln!(f, "}}")
+            }
             Statement::If { cond, then, else_ } => todo!(),
             Statement::Break => write!(f, "break"),
             Statement::Continue => write!(f, "continue"),

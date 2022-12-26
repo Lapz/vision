@@ -1,7 +1,10 @@
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash)]
 pub enum Token {
+    LeftBracket,
+    RightBracket,
     LeftParen,
     RightParen,
+
     LeftBrace,
     RightBrace,
     Comma,
@@ -47,4 +50,6 @@ pub enum Token {
     Type,
     Dollar,
     Interpolation,
+    FunctionReturn,
+    Bar,
 }

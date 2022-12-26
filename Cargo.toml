@@ -2,6 +2,7 @@
 members=[
     "compiler",
     "vision",
+    "syntax",
     "vm",
     "ast"
 ]

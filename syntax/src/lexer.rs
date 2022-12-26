@@ -1,4 +1,3 @@
-use super::parser::Parser;
 use crate::matches;
 
 use ast::prelude::{Position, Span, Spanned, Token};
@@ -36,7 +35,7 @@ impl<'a> Lexer<'a> {
                 "}" => self.make_token(Token::RightBrace),
                 "," => self.make_token(Token::Comma),
                 "." => self.make_token(Token::Dot),
-                "-" => self.make_token(Token::Minus),
+                "-" => matches!(self, ">", Token::FunctionReturn, Token::Minus),
                 "+" => self.make_token(Token::Plus),
                 "/" => self.make_token(Token::Slash),
                 "*" => self.make_token(Token::Star),
@@ -54,6 +53,9 @@ impl<'a> Lexer<'a> {
                 "<" => matches!(self, "=", Token::LessEqual, Token::Less),
                 ">" => matches!(self, "=", Token::GreaterEqual, Token::Greater),
                 "$" => self.make_token(Token::Dollar),
+                "|" => self.make_token(Token::Bar),
+                "[" => self.make_token(Token::LeftBracket),
+                "]" => self.make_token(Token::RightBracket),
                 "\"" => self.string(start),
                 ch if ch >= "0" && ch <= "9" => self.number(start),
                 ch if ch >= "a" && ch <= "z" || ch >= "A" && ch <= "Z" || ch == "_" => {
@@ -228,30 +230,18 @@ impl<'a> Lexer<'a> {
         // We use absolute here to get the proper index
         match self.src.get(start.absolute..start.absolute + 1) {
             Some("a") => self.check_keyword(start, 2, "nd", Token::And),
-            Some("c") => {
-                if self.start.absolute - start.absolute > 1 {
-                    match self.src.get(start.absolute + 1..start.absolute + 2) {
-                        Some("l") => self.check_keyword(start.shift("l"), 3, "ass", Token::Class),
-                        Some("o") => self.check_keyword(start.shift("o"), 3, "nst", Token::Const),
-                        _ => Token::Identifier,
-                    }
-                } else {
-                    Token::Identifier
-                }
-            }
+            Some("c") => match self.src.get(start.absolute + 1..start.absolute + 2) {
+                Some("l") => self.check_keyword(start.shift("l"), 3, "ass", Token::Class),
+                Some("o") => self.check_keyword(start.shift("o"), 3, "nst", Token::Const),
+                _ => Token::Identifier,
+            },
             Some("e") => self.check_keyword(start, 3, "lse", Token::Else),
-            Some("f") => {
-                if self.start.absolute - start.absolute > 1 {
-                    match self.src.get(start.absolute + 1..start.absolute + 2) {
-                        Some("a") => self.check_keyword(start.shift("a"), 3, "lse", Token::False),
-                        Some("o") => self.check_keyword(start.shift("o"), 1, "r", Token::For),
-                        Some("n") => Token::Fun,
-                        _ => Token::Identifier,
-                    }
-                } else {
-                    Token::Identifier
-                }
-            }
+            Some("f") => match self.src.get(start.absolute + 1..start.absolute + 2) {
+                Some("a") => self.check_keyword(start.shift("a"), 3, "lse", Token::False),
+                Some("o") => self.check_keyword(start.shift("o"), 1, "r", Token::For),
+                Some("n") => Token::Fun,
+                _ => Token::Identifier,
+            },
 
             Some("i") => self.check_keyword(start, 1, "f", Token::If),
             Some("n") => self.check_keyword(start, 2, "il", Token::Nil),
@@ -259,31 +249,20 @@ impl<'a> Lexer<'a> {
             Some("p") => self.check_keyword(start, 4, "rint", Token::Print),
             Some("r") => self.check_keyword(start, 5, "eturn", Token::Return),
             Some("s") => self.check_keyword(start, 4, "uper", Token::Super),
-            Some("t") => {
-                if self.start.absolute - start.absolute > 1 {
-                    match self.src.get(start.absolute + 1..start.absolute + 2) {
-                        Some("h") => self.check_keyword(start.shift("h"), 2, "is", Token::This),
-                        Some("r") => match self.src.get(start.absolute + 2..start.absolute + 3) {
-                            Some("u") => {
-                                self.check_keyword(start.shift("r").shift("u"), 1, "e", Token::True)
-                            }
-                            Some("a") => self.check_keyword(
-                                start.shift("r").shift("a"),
-                                2,
-                                "it",
-                                Token::Trait,
-                            ),
-
-                            _ => Token::Identifier,
-                        },
-                        Some("y") => self.check_keyword(start.shift("y"), 2, "pe", Token::Type),
-
-                        _ => Token::Identifier,
+            Some("t") => match self.src.get(start.absolute + 1..start.absolute + 2) {
+                Some("h") => self.check_keyword(start.shift("h"), 2, "is", Token::This),
+                Some("r") => match self.src.get(start.absolute + 2..start.absolute + 3) {
+                    Some("u") => {
+                        self.check_keyword(start.shift("r").shift("u"), 1, "e", Token::True)
                     }
-                } else {
-                    Token::Identifier
-                }
-            }
+                    Some("a") => {
+                        self.check_keyword(start.shift("r").shift("a"), 2, "it", Token::Trait)
+                    }
+                    _ => Token::Identifier,
+                },
+                Some("y") => self.check_keyword(start.shift("y"), 2, "pe", Token::Type),
+                _ => Token::Identifier,
+            },
             Some("l") => self.check_keyword(start, 2, "et", Token::Var),
             Some("w") => self.check_keyword(start, 4, "hile", Token::While),
             _ => Token::Identifier,

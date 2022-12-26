@@ -2,7 +2,6 @@ mod compiler;
 mod parser;
 mod scanner;
 mod token;
-pub mod v2;
 
 use scanner::Scanner;
 use vm::{Allocator, FunctionObject, ObjectPtr, Table};

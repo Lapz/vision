@@ -50,4 +50,5 @@ pub enum TokenType {
     Eof,
     QuestionMark,
     Colon,
+    Type,
 }

@@ -36,9 +36,11 @@ impl<'a> Parser<'a> {
         self.rules[&ty]
     }
 
-    pub(crate) fn error(&self, msg: &str) -> Spanned<Expression> {
+    pub(crate) fn error(&mut self, msg: &str) -> Spanned<Expression> {
         println!("{}", msg);
 
+        self.panic_mode = true;
+        self.had_error = true;
         Spanned::new(Expression::Error, self.prev.span())
     }
 

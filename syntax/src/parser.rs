@@ -3,7 +3,9 @@ use std::collections::HashMap;
 use crate::hashmap;
 
 use super::lexer::Lexer;
-use ast::prelude::{Expression, Interner, LiteralId, Position, Span, Spanned, SymbolId, Token};
+use ast::prelude::{
+    Expression, Interner, LiteralId, Position, Program, Span, Spanned, SymbolId, Token,
+};
 pub struct Parser<'a> {
     pub(crate) src: &'a str,
     pub(crate) lexer: Lexer<'a>,
@@ -186,6 +188,8 @@ impl<'a> Parser<'a> {
                 Token::Comma => ParseRule::default(),
                 Token::Dot => ParseRule::default(),
                 Token::Colon => ParseRule::default(),
+                Token::LeftBracket => ParseRule::default(),
+                Token::RightBracket => ParseRule::default(),
             },
         };
 
@@ -208,17 +212,28 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn declaration(&mut self) {
-        if self.match_token(Token::Const) {
-            self.const_declaration()
-        } else if self.match_token(Token::Fun) {
-            self.fn_declaration()
-        } else if self.match_token(Token::Trait) {
-            self.trait_declaration()
+    pub fn parse(&mut self) -> Option<Program> {
+        let mut program = Program::new();
+
+        while !self.match_token(Token::Eof) {
+            if self.match_token(Token::Const) {
+                program.add_const(self.const_declaration())
+            } else if self.match_token(Token::Fun) {
+                let fun = self.fn_declaration();
+                program.add_fn(fun)
+            } else if self.match_token(Token::Type) {
+                program.add_type_alias(self.type_alias())
+            } else if self.match_token(Token::Trait) {
+                self.trait_declaration()
+            }
+
+            self.synchronize();
         }
 
-        if self.panic_mode {
-            self.synchronize();
+        if self.had_error {
+            None
+        } else {
+            Some(program)
         }
     }
 
