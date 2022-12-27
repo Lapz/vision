@@ -5,13 +5,13 @@ use crate::{
 };
 #[derive(Debug)]
 pub struct Program {
-    functions: Vec<Spanned<Function>>,
-    consts: Vec<Spanned<Const>>,
-    type_alias: Vec<Spanned<TypeAlias>>,
+    pub functions: Vec<Spanned<Function>>,
+    pub consts: Vec<Spanned<Const>>,
+    pub type_alias: Vec<Spanned<TypeAlias>>,
 }
 #[derive(Debug)]
 pub struct Function {
-    pub name: SymbolId,
+    pub name: Spanned<SymbolId>,
     pub params: Vec<Spanned<FunctionParam>>,
     pub body: Spanned<Statement>,
     pub returns: Option<Spanned<Type>>,
@@ -32,7 +32,7 @@ pub struct FunctionParam {
 pub struct Trait {}
 #[derive(Debug)]
 pub struct Const {
-    pub name: SymbolId,
+    pub name: Spanned<SymbolId>,
     pub ty: Option<Spanned<Type>>,
     pub initializer: Spanned<Expression>,
 }
@@ -40,7 +40,7 @@ pub struct Const {
 pub struct Struct {}
 #[derive(Debug)]
 pub struct TypeAlias {
-    pub name: SymbolId,
+    pub name: Spanned<SymbolId>,
     pub ty: Spanned<Type>,
 }
 

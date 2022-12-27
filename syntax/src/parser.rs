@@ -4,7 +4,7 @@ use crate::hashmap;
 
 use super::lexer::Lexer;
 use ast::prelude::{
-    Expression, Interner, LiteralId, Position, Program, Span, Spanned, SymbolId, Token,
+    Expression, Interner, LiteralId, Position, Program, Span, Spanned, SymbolDB, SymbolId, Token,
 };
 use errors::Reporter;
 pub struct Parser<'a> {
@@ -16,7 +16,7 @@ pub struct Parser<'a> {
     pub(crate) prev: Spanned<Token>,
     pub(crate) reporter: Reporter,
     pub(crate) rules: HashMap<Token, ParseRule<'a>>,
-    pub(crate) symbols: Interner<&'a str, SymbolId>,
+    pub(crate) symbols: SymbolDB,
 }
 
 #[derive(Clone, Copy)]
@@ -216,7 +216,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse(&mut self) -> Option<Program> {
+    pub fn parse(mut self) -> Option<(Program, SymbolDB)> {
         let mut program = Program::new();
 
         while !self.match_token(Token::Eof) {
@@ -239,7 +239,7 @@ impl<'a> Parser<'a> {
         if self.had_error {
             None
         } else {
-            Some(program)
+            Some((program, self.symbols))
         }
     }
 

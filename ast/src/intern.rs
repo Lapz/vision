@@ -2,7 +2,7 @@ use std::{
     borrow::Borrow,
     cell::RefCell,
     collections::HashMap,
-    fmt::Display,
+    fmt::{Debug, Display},
     hash::Hash,
     marker::PhantomData,
     ops::{Deref, Index},
@@ -10,7 +10,9 @@ use std::{
     rc::Rc,
 };
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub type SymbolDB = Interner<SymbolId>;
+
+#[derive(Debug, Clone, Copy, PartialEq, Hash, Eq)]
 pub struct SymbolId(u32);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -22,7 +24,7 @@ impl Display for SymbolId {
     }
 }
 
-pub trait InternId: Copy + Clone {
+pub trait InternId: Copy + Clone + Debug {
     fn id(index: u32) -> Self;
     fn index(&self) -> u32;
 }
@@ -60,6 +62,14 @@ impl<T: ?Sized> Deref for OwnedPtr<T> {
     }
 }
 
+impl<T: ?Sized + Debug> Debug for OwnedPtr<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("OwnedPtr")
+            .field("ptr", &self.ptr)
+            .field("marker", &self.marker)
+            .finish()
+    }
+}
 impl<T: ?Sized> Borrow<T> for OwnedPtr<T> {
     fn borrow(&self) -> &T {
         self
@@ -91,43 +101,62 @@ impl<T: ?Sized + PartialEq> PartialEq for OwnedPtr<T> {
         (**self).eq(&**other)
     }
 }
-pub struct Interner<K: ?Sized + Hash + PartialEq + Eq, T: InternId> {
-    map: HashMap<OwnedPtr<K>, T>,
+pub struct Interner<T: InternId> {
+    map: HashMap<&'static str, T>,
+    strings: Vec<&'static str>,
+    buf: String,
+    full: Vec<String>,
 }
 
-impl<K: ?Sized + Hash + PartialEq + Eq, T: InternId> Interner<K, T> {
+impl<T: InternId> Interner<T> {
     pub fn new() -> Self {
         Self {
             map: HashMap::new(),
+            strings: Vec::with_capacity(8),
+            buf: String::with_capacity(8),
+            full: Vec::with_capacity(8),
         }
     }
 
-    pub fn intern(&mut self, item: K) -> T
-    where
-        K: Borrow<K> + Into<Box<K>>,
-    {
+    pub fn intern(&mut self, item: &str) -> T {
         let borrowed = item.borrow();
 
         if let Some((_, id)) = self.map.get_key_value(borrowed) {
             return *id;
         }
 
+        let string: &'static str = unsafe { self.alloc(item) };
+
         let id = T::id(self.map.borrow().len() as u32);
 
-        let key = OwnedPtr::new(item.into());
-
-        self.map.insert(key, id);
+        self.map.insert(string, id);
+        self.strings.push(string);
 
         id
     }
 
-    pub fn get(&self, key: &T) -> Option<&K> {
-        self.map
-            .iter()
-            .skip(key.index() as usize)
-            .take(1)
-            .next()
-            .map(|(k, _)| unsafe { k.as_ref() })
+    unsafe fn alloc(&mut self, name: &str) -> &'static str {
+        let cap = self.buf.capacity();
+        if cap < self.buf.len() + name.len() {
+            let new_cap = (cap.max(name.len()) + 1).next_power_of_two();
+            let new_buf = String::with_capacity(new_cap);
+            let old_buf = std::mem::replace(&mut self.buf, new_buf);
+            self.full.push(old_buf);
+        }
+        let interned = {
+            let start = self.buf.len();
+            self.buf.push_str(name);
+            &self.buf[start..]
+        };
+        &*(interned as *const str)
+    }
+
+    pub fn get(&self, key: &T) -> Option<&&'static str> {
+        self.strings.get(key.index() as usize)
+    }
+
+    pub fn lookup(&self, key: &T) -> Option<&&'static str> {
+        self.strings.get(key.index() as usize)
     }
 }
 
@@ -141,6 +170,7 @@ mod tests {
 
         assert_eq!(interner.intern("hello"), SymbolId::id(0));
         assert_eq!(interner.intern("world"), SymbolId::id(1));
+        assert_eq!(interner.intern("hello"), SymbolId::id(0));
         assert_eq!(interner.get(&SymbolId::id(0)), Some(&"hello"));
     }
 }

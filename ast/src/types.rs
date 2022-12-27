@@ -1,5 +1,5 @@
 use crate::{intern::SymbolId, prelude::Spanned};
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Type {
     /// number, float, string etc
     Identifier(SymbolId),

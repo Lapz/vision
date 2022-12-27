@@ -1,10 +1,11 @@
 use compiler::{compile, ParseResult};
 use syntax::Parser;
 
-use std::env;
+use core::construct_ir;
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
+use std::{env, process::exit};
 use vm::{ClosureObject, Value, VM};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -74,12 +75,12 @@ fn run_file(path: &dyn AsRef<Path>) -> Result<(), Box<dyn std::error::Error>> {
 
     let mut parser = Parser::new(&buffer);
 
-    match parser.parse() {
-        Some(program) => {
-            println!("{:#?}", program);
-        }
-        None => {}
-    }
+    let ast = match parser.parse() {
+        Some(program) => program,
+        None => exit(1),
+    };
+
+    let ir = construct_ir(&buffer, ast);
 
     Ok(())
 }

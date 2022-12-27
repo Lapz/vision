@@ -77,9 +77,11 @@ impl<'a> Parser<'a> {
     pub(crate) fn type_alias(&mut self) -> Spanned<TypeAlias> {
         let start = self.prev.span();
         self.consume(Token::Identifier, "Expected variable name");
-        let id = self
-            .symbols
-            .intern(&self.src[self.prev.span().start.absolute..self.prev.span().end.absolute]);
+        let id = Spanned::new(
+            self.symbols
+                .intern(&self.src[self.prev.span().start.absolute..self.prev.span().end.absolute]),
+            self.prev.span(),
+        );
 
         self.consume(Token::Equal, "Expected `=`");
 
@@ -93,9 +95,11 @@ impl<'a> Parser<'a> {
     pub(crate) fn const_declaration(&mut self) -> Spanned<Const> {
         let start = self.prev.span();
         self.consume(Token::Identifier, "Expected variable name");
-        let id = self
-            .symbols
-            .intern(&self.src[self.prev.span().start.absolute..self.prev.span().end.absolute]);
+        let id = Spanned::new(
+            self.symbols
+                .intern(&self.src[self.prev.span().start.absolute..self.prev.span().end.absolute]),
+            self.prev.span(),
+        );
 
         let mut ty = None;
 
@@ -271,9 +275,11 @@ impl<'a> Parser<'a> {
     pub(crate) fn fn_declaration(&mut self) -> Spanned<Function> {
         let start = self.prev.span();
         self.consume(Token::Identifier, "Expected variable name");
-        let id = self
-            .symbols
-            .intern(&self.src[self.prev.span().start.absolute..self.prev.span().end.absolute]);
+        let id = Spanned::new(
+            self.symbols
+                .intern(&self.src[self.prev.span().start.absolute..self.prev.span().end.absolute]),
+            self.prev.span(),
+        );
 
         let end = self.prev.span();
 
