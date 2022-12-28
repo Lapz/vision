@@ -108,6 +108,24 @@ pub struct Interner<T: InternId> {
     full: Vec<String>,
 }
 
+impl Default for SymbolDB {
+    fn default() -> Self {
+        let mut db = Self {
+            map: HashMap::new(),
+            strings: Vec::with_capacity(8),
+            buf: String::with_capacity(8),
+            full: Vec::with_capacity(8),
+        };
+
+        db.intern("number");
+        db.intern("float");
+        db.intern("bool");
+        db.intern("string");
+
+        db
+    }
+}
+
 impl<T: InternId> Interner<T> {
     pub fn new() -> Self {
         Self {
@@ -151,12 +169,8 @@ impl<T: InternId> Interner<T> {
         &*(interned as *const str)
     }
 
-    pub fn get(&self, key: &T) -> Option<&&'static str> {
-        self.strings.get(key.index() as usize)
-    }
-
-    pub fn lookup(&self, key: &T) -> Option<&&'static str> {
-        self.strings.get(key.index() as usize)
+    pub fn lookup(&self, key: &T) -> &'static str {
+        self.strings[key.index() as usize]
     }
 }
 
@@ -171,6 +185,6 @@ mod tests {
         assert_eq!(interner.intern("hello"), SymbolId::id(0));
         assert_eq!(interner.intern("world"), SymbolId::id(1));
         assert_eq!(interner.intern("hello"), SymbolId::id(0));
-        assert_eq!(interner.get(&SymbolId::id(0)), Some(&"hello"));
+        assert_eq!(interner.lookup(&SymbolId::id(0)), "hello");
     }
 }

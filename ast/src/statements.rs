@@ -22,7 +22,7 @@ pub enum Statement {
     Break,
     Continue,
     Let {
-        identifier: SymbolId,
+        identifier: Spanned<SymbolId>,
         ty: Option<Spanned<Type>>,
         init: Option<Spanned<Expression>>,
     },
@@ -57,7 +57,7 @@ impl Display for Statement {
                 ty,
                 init,
             } => {
-                write!(f, "let {} := ", identifier)?;
+                write!(f, "let {} := ", identifier.value())?;
                 match init {
                     Some(expr) => write!(f, "{}", &expr),
                     None => write!(f, "nil"),

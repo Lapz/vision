@@ -2,7 +2,7 @@ use crate::{intern::SymbolId, prelude::Spanned};
 #[derive(Debug, Clone)]
 pub enum Type {
     /// number, float, string etc
-    Identifier(SymbolId),
+    Identifier(Spanned<SymbolId>),
     /// [number;2] or  [numbe]
     Array {
         ty: Box<Spanned<Type>>,

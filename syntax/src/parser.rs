@@ -58,7 +58,7 @@ impl<'a> Parser<'a> {
                 Token::Eof,
                 Span::new(Position::new(1, 1, 0), Position::new(1, 1, 0)),
             ),
-            symbols: Interner::new(),
+            symbols: SymbolDB::default(),
             rules: hashmap! {
                 Token::LeftParen => ParseRule {
                         prefix: Some(Parser::grouping),

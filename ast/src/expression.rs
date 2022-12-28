@@ -1,9 +1,6 @@
 use std::fmt::{self, Display};
 
-use crate::{
-    intern::{LiteralId, SymbolId},
-    prelude::{Span, Spanned},
-};
+use crate::{intern::SymbolId, prelude::Spanned};
 #[derive(Debug)]
 pub enum Expression {
     Literal(Literal),
@@ -12,7 +9,7 @@ pub enum Expression {
         lhs: Box<Spanned<Expression>>,
         rhs: Box<Spanned<Expression>>,
     },
-    Identifier(SymbolId),
+    Identifier(Spanned<SymbolId>),
     Binary {
         op: Spanned<BinaryOp>,
         lhs: Box<Spanned<Expression>>,
@@ -20,7 +17,7 @@ pub enum Expression {
     },
     Grouping(Box<Spanned<Expression>>),
     Call {
-        callee: SymbolId,
+        callee: Spanned<SymbolId>,
         args: Vec<Spanned<Expression>>,
     },
     Unary {
@@ -115,7 +112,7 @@ impl Display for Expression {
             Expression::Ternary { cond, lhs, rhs } => {
                 write!(f, "{} ? {} : {}", cond, lhs, rhs)
             }
-            Expression::Identifier(ident) => write!(f, "{}", ident),
+            Expression::Identifier(ident) => write!(f, "{}", ident.value()),
             Expression::Binary { op, lhs, rhs } => write!(f, "{} {} {}", lhs, op, rhs),
             Expression::Grouping(expr) => write!(f, "({})", expr),
             Expression::Call { callee, args } => todo!(),
