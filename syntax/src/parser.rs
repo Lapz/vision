@@ -3,9 +3,7 @@ use std::collections::HashMap;
 use crate::hashmap;
 
 use super::lexer::Lexer;
-use ast::prelude::{
-    Expression, Interner, LiteralId, Position, Program, Span, Spanned, SymbolDB, SymbolId, Token,
-};
+use ast::prelude::{Expression, Position, Program, Span, Spanned, SymbolDB, Token};
 use errors::Reporter;
 pub struct Parser<'a> {
     pub(crate) src: &'a str,

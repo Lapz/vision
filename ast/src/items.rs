@@ -23,7 +23,7 @@ pub enum ParamKind {
 }
 #[derive(Debug)]
 pub struct FunctionParam {
-    pub name: SymbolId,
+    pub name: Spanned<SymbolId>,
     pub ty: Spanned<Type>,
 }
 

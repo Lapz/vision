@@ -34,12 +34,9 @@ impl<'a> Parser<'a> {
     }
 
     pub(crate) fn identifier(&mut self) -> Spanned<Expression> {
-        let span = self.prev.span();
-        let id = self
-            .symbols
-            .intern(&self.src[span.start.absolute..span.end.absolute]);
+        let id = self.get_identifier();
 
-        Spanned::new(Expression::Identifier(id), span)
+        Spanned::new(Expression::Identifier(id), id.span())
     }
 
     pub(crate) fn ternary(&mut self, cond: Spanned<Expression>) -> Spanned<Expression> {

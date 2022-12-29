@@ -42,7 +42,7 @@ impl Reporter {
     }
 
     pub fn has_error(&self) -> bool {
-        self.diagnostics.borrow().is_empty()
+        !self.diagnostics.borrow().is_empty()
     }
 
     pub fn remove_error(&mut self) {
@@ -148,6 +148,8 @@ fn print(input: &str, d: &Diagnostic) {
             break;
         }
     }
+
+    println!()
 }
 
 fn repeat_string(s: &str, count: usize) -> String {

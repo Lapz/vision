@@ -1,4 +1,4 @@
-use ast::prelude::{BinaryOp, Expression, Span, Spanned, Token, UnaryOp};
+use ast::prelude::{BinaryOp, Expression, Span, Spanned, SymbolId, Token, UnaryOp};
 
 use super::parser::{ParseRule, Parser, Precedence};
 
@@ -113,6 +113,15 @@ impl<'a> Parser<'a> {
         }
 
         expr
+    }
+
+    pub(crate) fn get_identifier(&mut self) -> Spanned<SymbolId> {
+        let span = self.prev.span();
+        let id = self
+            .symbols
+            .intern(&self.src[span.start.absolute..span.end.absolute]);
+
+        Spanned::new(id, span)
     }
 
     pub(crate) fn get_unary_op(&mut self) -> Spanned<UnaryOp> {

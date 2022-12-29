@@ -63,9 +63,7 @@ impl<'a> Parser<'a> {
 
             Spanned::new(Type::Function { params, returns }, start.merge(end))
         } else if self.match_token(Token::Identifier) {
-            let id = self
-                .symbols
-                .intern(&self.src[self.prev.span().start.absolute..self.prev.span().end.absolute]);
+            let id = self.get_identifier();
 
             Spanned::new(Type::Identifier(id), self.prev.span())
         } else {
@@ -77,11 +75,8 @@ impl<'a> Parser<'a> {
     pub(crate) fn type_alias(&mut self) -> Spanned<TypeAlias> {
         let start = self.prev.span();
         self.consume(Token::Identifier, "Expected variable name");
-        let id = Spanned::new(
-            self.symbols
-                .intern(&self.src[self.prev.span().start.absolute..self.prev.span().end.absolute]),
-            self.prev.span(),
-        );
+
+        let id = self.get_identifier();
 
         self.consume(Token::Equal, "Expected `=`");
 
@@ -95,11 +90,8 @@ impl<'a> Parser<'a> {
     pub(crate) fn const_declaration(&mut self) -> Spanned<Const> {
         let start = self.prev.span();
         self.consume(Token::Identifier, "Expected variable name");
-        let id = Spanned::new(
-            self.symbols
-                .intern(&self.src[self.prev.span().start.absolute..self.prev.span().end.absolute]),
-            self.prev.span(),
-        );
+
+        let id = self.get_identifier();
 
         let mut ty = None;
 
@@ -246,9 +238,7 @@ impl<'a> Parser<'a> {
 
                 let start = self.prev.span();
 
-                let id = self
-                    .symbols
-                    .intern(&self.src[start.start.absolute..start.end.absolute]);
+                let id = self.get_identifier();
 
                 self.consume(Token::Colon, "Expected `:`");
 
@@ -275,11 +265,8 @@ impl<'a> Parser<'a> {
     pub(crate) fn fn_declaration(&mut self) -> Spanned<Function> {
         let start = self.prev.span();
         self.consume(Token::Identifier, "Expected variable name");
-        let id = Spanned::new(
-            self.symbols
-                .intern(&self.src[self.prev.span().start.absolute..self.prev.span().end.absolute]),
-            self.prev.span(),
-        );
+
+        let id = self.get_identifier();
 
         let end = self.prev.span();
 
@@ -317,9 +304,7 @@ impl<'a> Parser<'a> {
     pub(crate) fn let_statement(&mut self) -> Spanned<Statement> {
         let start = self.prev.span();
         self.consume(Token::Identifier, "Expected variable name");
-        let id = self
-            .symbols
-            .intern(&self.src[self.prev.span().start.absolute..self.prev.span().end.absolute]);
+        let id = self.get_identifier();
 
         let ty = None;
         let mut init = None;

@@ -107,11 +107,21 @@ pub struct Interner<T: InternId> {
     buf: String,
     full: Vec<String>,
 }
+impl<T: InternId> Debug for Interner<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Interner")
+            .field("map", &self.map)
+            .field("strings", &self.strings)
+            .field("buf", &self.buf)
+            .field("full", &self.full)
+            .finish()
+    }
+}
 
 impl Default for SymbolDB {
     fn default() -> Self {
         let mut db = Self {
-            map: HashMap::new(),
+            map: HashMap::with_capacity(8),
             strings: Vec::with_capacity(8),
             buf: String::with_capacity(8),
             full: Vec::with_capacity(8),

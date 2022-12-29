@@ -73,7 +73,7 @@ fn run_file(path: &dyn AsRef<Path>) -> Result<(), Box<dyn std::error::Error>> {
 
     file.read_to_string(&mut buffer)?;
 
-    let mut parser = Parser::new(&buffer);
+    let parser = Parser::new(&buffer);
 
     let ast = match parser.parse() {
         Some(program) => program,

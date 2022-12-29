@@ -1,6 +1,7 @@
 use std::{
     borrow::{Borrow, BorrowMut},
     cmp,
+    hash::Hash,
     ops::{Deref, DerefMut},
 };
 
@@ -69,8 +70,25 @@ impl<T> BorrowMut<T> for Spanned<T> {
     }
 }
 
+impl<T: Hash> Hash for Spanned<T> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.value.hash(state);
+        self.span.hash(state);
+    }
+}
+
+impl<T: PartialEq> PartialEq for Spanned<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.value == other.value && self.span == other.span
+    }
+}
+
+impl<T: Eq> Eq for Spanned<T> {}
+
+impl<T: Copy> Copy for Spanned<T> {}
+
 /// A span between two locations in a source file
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Hash, Eq)]
 pub struct Span {
     pub start: Position,
     pub end: Position,
@@ -88,7 +106,7 @@ impl Span {
         }
     }
 }
-#[derive(Debug, Copy, PartialOrd, Clone, PartialEq, Eq, Ord)]
+#[derive(Debug, Copy, PartialOrd, Clone, PartialEq, Eq, Ord, Hash)]
 pub struct Position {
     pub line: u32,
     pub column: u32,
