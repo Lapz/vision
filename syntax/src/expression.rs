@@ -78,6 +78,40 @@ impl<'a> Parser<'a> {
         )
     }
 
+    pub(crate) fn call(&mut self, lhs: Spanned<Expression>) -> Spanned<Expression> {
+        let mut args = Vec::new();
+
+        let mut count = 0;
+
+        if !self.check(Token::RightParen) {
+            loop {
+                args.push(self.expression());
+
+                if count == 255 {
+                    self.error("Can't have more than 255 arguments.");
+                }
+
+                count += 1;
+
+                if !self.match_token(Token::Comma) {
+                    break;
+                }
+            }
+        }
+
+        let start = lhs.span();
+
+        let end = self.consume_get_span(Token::RightParen, "Expected ')' after arguments");
+
+        Spanned::new(
+            Expression::Call {
+                callee: Box::new(lhs),
+                args: args,
+            },
+            start.merge(end),
+        )
+    }
+
     pub(crate) fn grouping(&mut self) -> Spanned<Expression> {
         let expr = self.expression();
 

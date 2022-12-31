@@ -17,7 +17,7 @@ pub enum Expression {
     },
     Grouping(Box<Spanned<Expression>>),
     Call {
-        callee: Spanned<SymbolId>,
+        callee: Box<Spanned<Expression>>,
         args: Vec<Spanned<Expression>>,
     },
     Unary {

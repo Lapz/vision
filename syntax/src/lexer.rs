@@ -246,7 +246,6 @@ impl<'a> Lexer<'a> {
             Some("i") => self.check_keyword(start, 1, "f", Token::If),
             Some("n") => self.check_keyword(start, 2, "il", Token::Nil),
             Some("o") => self.check_keyword(start, 1, "r", Token::Or),
-            Some("p") => self.check_keyword(start, 4, "rint", Token::Print),
             Some("r") => self.check_keyword(start, 5, "eturn", Token::Return),
             Some("s") => self.check_keyword(start, 4, "uper", Token::Super),
             Some("t") => match self.src.get(start.absolute + 1..start.absolute + 2) {

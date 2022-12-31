@@ -230,7 +230,7 @@ impl<'ast, 'a> Visitor<'ast> for Resolver {
             }
             Expression::Grouping(expr) => self.visit_expr(expr),
             Expression::Call { callee, args } => {
-                self.visit_name(callee);
+                self.visit_expr(callee);
                 for arg in args {
                     self.visit_expr(arg);
                 }
@@ -291,7 +291,7 @@ impl<'ast, 'a> Visitor<'ast> for Resolver {
             state.state = State::Read;
             state.reads += 1;
             return;
-        } //check for ident name in function/local scope
+        } //check for ident name in local scope
 
         if !self.items.contains(ident.value()) {
             let msg = format!(

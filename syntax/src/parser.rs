@@ -60,7 +60,7 @@ impl<'a> Parser<'a> {
             rules: hashmap! {
                 Token::LeftParen => ParseRule {
                         prefix: Some(Parser::grouping),
-                        infix: None,
+                        infix:  Some(Parser::call),
                         precedence: Precedence::Call,
                 },
                 Token::RightParen => ParseRule::default(),

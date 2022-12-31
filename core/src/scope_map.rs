@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fmt::Debug;
 use std::hash::Hash;
 
 #[derive(Default, Debug, Clone)]
@@ -15,7 +16,7 @@ impl<K: Hash + Eq + Copy + Clone, V: PartialEq> PartialEq for StackedMap<K, V> {
 
 impl<K: Hash + Eq + Copy + Clone, V: PartialEq> Eq for StackedMap<K, V> {}
 
-impl<K: Hash + Eq + Copy + Clone, V> StackedMap<K, V> {
+impl<K: Hash + Eq + Copy + Clone + Debug, V: Debug> StackedMap<K, V> {
     pub fn new() -> Self {
         StackedMap {
             table: HashMap::new(),
