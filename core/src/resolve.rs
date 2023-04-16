@@ -4,7 +4,10 @@ use ast::prelude::{
     Trait, Type, TypeAlias, DEFAULT_TYPES,
 };
 use errors::Reporter;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
+
+#[cfg(test)]
+mod test;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum State {
@@ -73,7 +76,9 @@ impl Resolver {
 
     /// The resolver takes the ast, checks that all referenced variables etc are defined and then
     /// it will return a typed syntax tree, the typed syntax tree is the ast tree annotated with all types
-    pub fn resolve_program(mut self, program: &Program) -> Reporter {
+    pub fn resolve_program(&mut self, program: &Program) -> Reporter {
+        // We begin a scope so we can report the top level unused items;
+        self.begin_scope();
         // We support forward declarations so grab the fowared references so we can use them later
         for type_alias in &program.type_alias {
             self.declare_item(type_alias.name, ItemKind::Type, false)
@@ -102,7 +107,9 @@ impl Resolver {
             self.define(function.name, ItemKind::Value)
         }
 
-        self.reporter
+        self.end_scope();
+
+        self.reporter.clone()
     }
 
     pub fn declare_item(&mut self, ident: Spanned<SymbolId>, kind: ItemKind, exported: bool) {
@@ -158,8 +165,10 @@ impl Resolver {
         for ((name, _), state) in self.data.end_scope_iter() {
             let LocalData { reads, state, span } = state;
 
-            if reads == 0 || state == State::Declared {
-                let msg = format!("Unused variable `{}`", self.symbols.lookup(&name));
+            let name = self.symbols.lookup(&name);
+
+            if (reads == 0 || state == State::Declared) && name != "main" {
+                let msg = format!("Unused variable `{}`", name);
                 self.reporter.warn(msg, span)
             }
         }
@@ -196,11 +205,11 @@ impl<'ast, 'a> Visitor<'ast> for Resolver {
                 }
             }
             Statement::Block(stmts) => {
-                self.data.begin_scope();
+                self.begin_scope();
                 for stmt in stmts {
                     self.visit_stmt(stmt)
                 }
-                self.data.end_scope();
+                self.end_scope();
             }
             Statement::Return(expr) => {
                 if let Some(expr) = expr {

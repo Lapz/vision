@@ -5,7 +5,7 @@ mod resolve;
 mod scope_map;
 mod visitor;
 pub fn construct_ir(src: &str, (ast, symbols): (Program, SymbolDB)) -> Option<()> {
-    let resolver = Resolver::new(symbols);
+    let mut resolver = Resolver::new(symbols);
 
     let errors = resolver.resolve_program(&ast);
 

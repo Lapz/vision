@@ -2,6 +2,7 @@ mod color;
 
 use crate::color::*;
 use ast::prelude::Span;
+use std::cell::Ref;
 use std::cell::RefCell;
 use std::fmt::{self, Display};
 use std::iter::repeat;
@@ -9,8 +10,8 @@ use std::rc::Rc;
 
 #[derive(Debug)]
 pub struct Diagnostic {
-    msg: String,
-    level: Level,
+    pub msg: String,
+    pub level: Level,
     span: Span,
 }
 
@@ -77,6 +78,10 @@ impl Reporter {
         for diagnostic in self.diagnostics.borrow().iter() {
             print(input, diagnostic)
         }
+    }
+
+    pub fn diagnostics(&self) -> Ref<Vec<Diagnostic>> {
+        self.diagnostics.borrow()
     }
 }
 
