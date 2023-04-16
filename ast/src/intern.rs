@@ -1,13 +1,11 @@
 use std::{
     borrow::Borrow,
-    cell::RefCell,
     collections::HashMap,
     fmt::{Debug, Display},
     hash::Hash,
     marker::PhantomData,
-    ops::{Deref, Index},
+    ops::Deref,
     ptr::NonNull,
-    rc::Rc,
 };
 
 pub type SymbolDB = Interner<SymbolId>;

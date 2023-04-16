@@ -9,11 +9,6 @@ pub struct Env {
     pub(crate) value_db: SymbolDB,
 }
 
-pub enum ItemKind {
-    Type,
-    Value,
-}
-
 impl Env {
     pub fn new() -> Self {
         Self {

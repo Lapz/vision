@@ -1,10 +1,7 @@
-use crate::scope_map::StackedMap;
-use ast::{
-    prelude::{
-        Const, Expression, Function, ItemKind, Program, Span, Spanned, Statement, SymbolDB,
-        SymbolId, Trait, Type, TypeAlias, DEFAULT_TYPES,
-    },
-    visitor::Visitor,
+use crate::{scope_map::StackedMap, visitor::Visitor};
+use ast::prelude::{
+    Const, Expression, Function, ItemKind, Program, Span, Spanned, Statement, SymbolDB, SymbolId,
+    Trait, Type, TypeAlias, DEFAULT_TYPES,
 };
 use errors::Reporter;
 use std::collections::{HashMap, HashSet};

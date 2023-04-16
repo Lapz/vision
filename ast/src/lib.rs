@@ -5,7 +5,6 @@ mod span;
 mod statements;
 mod token;
 mod types;
-pub mod visitor;
 
 pub mod prelude {
     pub use crate::expression::*;

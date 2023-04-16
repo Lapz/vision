@@ -1,7 +1,6 @@
-use crate::{
-    expression::{self, Expression},
-    items::{Const, Function, FunctionParam, ItemKind, ParamKind, Trait, TypeAlias},
-    prelude::{Spanned, Statement, SymbolId, Type},
+use ast::prelude::{
+    Const, Expression, Function, FunctionParam, ItemKind, Spanned, Statement, SymbolId, Trait,
+    Type, TypeAlias,
 };
 
 pub trait Visitor<'ast>: Sized {
