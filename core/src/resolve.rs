@@ -66,6 +66,7 @@ impl Resolver {
     /// The resolver takes the ast, checks that all referenced variables etc are defined and then
     /// it will return a typed syntax tree, the typed syntax tree is the ast tree annotated with all types
     pub fn resolve_program(mut self, program: &Program) -> Reporter {
+        // We support forward declarations so grab the fowared references so we can use them later
         for type_alias in &program.type_alias {
             self.declare_item(type_alias.name, false)
         }

@@ -56,6 +56,7 @@ impl<'a> Parser<'a> {
                 Token::Eof,
                 Span::new(Position::new(1, 1, 0), Position::new(1, 1, 0)),
             ),
+
             symbols: SymbolDB::default(),
             rules: hashmap! {
                 Token::LeftParen => ParseRule {
@@ -229,7 +230,9 @@ impl<'a> Parser<'a> {
                 self.trait_declaration()
             }
 
-            self.synchronize();
+            if self.panic_mode {
+                self.synchronize()
+            }
         }
 
         self.reporter.emit(self.src);
@@ -245,19 +248,10 @@ impl<'a> Parser<'a> {
         self.panic_mode = false;
 
         while self.current.value() != &Token::Eof {
-            if self.prev.value() == &Token::SemiColon {
-                return;
-            }
+            self.error_at_current("Unexpected token");
 
             match *self.current.value() {
-                Token::Class
-                | Token::Fun
-                | Token::Var
-                | Token::For
-                | Token::If
-                | Token::While
-                | Token::Print
-                | Token::Return => return,
+                Token::Class | Token::Fun | Token::Trait | Token::Const => return,
                 _ => {}
             }
 

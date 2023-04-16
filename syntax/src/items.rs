@@ -82,7 +82,7 @@ impl<'a> Parser<'a> {
 
         let ty = self.parse_type();
 
-        let end = ty.span();
+        let end = self.consume_get_span(Token::SemiColon, "Expected `;` after a type declaration");
 
         Spanned::new(TypeAlias { name: id, ty }, start.merge(end))
     }
@@ -204,7 +204,7 @@ impl<'a> Parser<'a> {
             Some(self.expression())
         };
 
-        let end = self.prev.span();
+        let end = self.consume_get_span(Token::SemiColon, "Expected ';' after expression.");
 
         Spanned::new(Statement::Return(ret_value), start.merge(end))
     }
@@ -217,7 +217,6 @@ impl<'a> Parser<'a> {
         }
 
         let end = self.consume_get_span(Token::RightBrace, "Expected '}' after block.");
-
         Spanned::new(Statement::Block(block), start.merge(end))
     }
 
@@ -306,8 +305,12 @@ impl<'a> Parser<'a> {
         self.consume(Token::Identifier, "Expected variable name");
         let id = self.get_identifier();
 
-        let ty = None;
+        let mut ty = None;
         let mut init = None;
+
+        if self.match_token(Token::Colon) {
+            ty = Some(self.parse_type())
+        };
 
         if self.match_token(Token::Assignment) {
             init = Some(self.expression());
