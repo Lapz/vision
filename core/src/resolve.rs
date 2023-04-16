@@ -63,8 +63,9 @@ impl Resolver {
         }
     }
 
+    /// The resolver takes the ast, checks that all referenced variables etc are defined and then
+    /// it will return a typed syntax tree, the typed syntax tree is the ast tree annotated with all types
     pub fn resolve_program(mut self, program: &Program) -> Reporter {
-        self.begin_scope();
         for type_alias in &program.type_alias {
             self.declare_item(type_alias.name, false)
         }
@@ -91,8 +92,6 @@ impl Resolver {
             self.visit_function(function);
             self.define(function.name)
         }
-
-        self.end_scope();
 
         self.reporter
     }

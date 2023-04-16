@@ -44,8 +44,8 @@ impl<'a> Parser<'a> {
         Spanned::new(Expression::Error, self.prev.span())
     }
 
-    pub(crate) fn error_at_current(&mut self, lexme: &str) {
-        self.error_at(lexme, self.current.span());
+    pub(crate) fn error_at_current(&mut self, error_msg: &str) {
+        self.error_at(error_msg, self.current.span());
     }
 
     fn error_at(&mut self, msg: &str, span: Span) {
