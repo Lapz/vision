@@ -1,8 +1,8 @@
 use crate::scope_map::StackedMap;
 use ast::{
     prelude::{
-        Const, Expression, Function, Program, Span, Spanned, Statement, SymbolDB, SymbolId, Trait,
-        Type, TypeAlias,
+        Const, Expression, Function, ItemKind, Program, Span, Spanned, Statement, SymbolDB,
+        SymbolId, Trait, Type, TypeAlias, DEFAULT_TYPES,
     },
     visitor::Visitor,
 };
@@ -25,27 +25,38 @@ pub struct LocalData {
 }
 
 pub struct Resolver {
-    items: HashSet<SymbolId>,
-    exported_items: HashSet<SymbolId>,
+    items: HashSet<(SymbolId, ItemKind)>,
+    exported_items: HashSet<(SymbolId, ItemKind)>,
     reporter: Reporter,
     symbols: SymbolDB,
-
-    data: StackedMap<SymbolId, LocalData>,
+    data: StackedMap<(SymbolId, ItemKind), LocalData>,
 }
 
 impl Resolver {
-    pub fn new(symbols: SymbolDB) -> Self {
+    pub fn new(mut symbols: SymbolDB) -> Self {
+        let mut default_items = HashSet::new();
+
+        for ty in DEFAULT_TYPES {
+            default_items.insert((symbols.intern(ty), ItemKind::Type));
+        }
+
         Self {
             reporter: Reporter::new(),
-            items: HashSet::new(),
+            items: default_items,
             exported_items: HashSet::new(),
             symbols,
             data: StackedMap::new(),
         }
     }
 
-    pub fn add_item(&mut self, item: &Spanned<SymbolId>, exported: bool, emit_error: bool) {
-        if self.items.contains(item.value()) {
+    pub fn add_item(
+        &mut self,
+        item: &Spanned<SymbolId>,
+        kind: ItemKind,
+        exported: bool,
+        emit_error: bool,
+    ) {
+        if self.items.contains(&(*item.value(), kind)) {
             let name = self.symbols.lookup(item.value());
 
             if emit_error {
@@ -56,10 +67,10 @@ impl Resolver {
             }
         } else {
             if exported {
-                self.exported_items.insert(*item.value());
+                self.exported_items.insert((*item.value(), kind));
             }
 
-            self.items.insert(*item.value());
+            self.items.insert((*item.value(), kind));
         }
     }
 
@@ -68,51 +79,53 @@ impl Resolver {
     pub fn resolve_program(mut self, program: &Program) -> Reporter {
         // We support forward declarations so grab the fowared references so we can use them later
         for type_alias in &program.type_alias {
-            self.declare_item(type_alias.name, false)
+            self.declare_item(type_alias.name, ItemKind::Type, false)
         }
 
         for const_def in &program.consts {
-            self.declare_item(const_def.name, false)
+            self.declare_item(const_def.name, ItemKind::Value, false)
         }
 
         for function in &program.functions {
-            self.declare_item(function.name, false)
+            self.declare_item(function.name, ItemKind::Value, false)
         }
 
         for type_alias in &program.type_alias {
             self.visit_type_alias(type_alias);
-            self.define(type_alias.name)
+            self.define(type_alias.name, ItemKind::Type)
         }
 
         for const_def in &program.consts {
             self.visit_const(const_def);
-            self.define(const_def.name)
+            self.define(const_def.name, ItemKind::Value)
         }
 
         for function in &program.functions {
             self.visit_function(function);
-            self.define(function.name)
+            self.define(function.name, ItemKind::Value)
         }
 
         self.reporter
     }
 
-    pub fn declare_item(&mut self, ident: Spanned<SymbolId>, exported: bool) {
-        if self.data.get(&ident).is_some() {
+    pub fn declare_item(&mut self, ident: Spanned<SymbolId>, kind: ItemKind, exported: bool) {
+        if self.data.get(&(*ident, kind)).is_some() {
             let name = self.symbols.lookup(ident.value());
 
             let msg = format!("Duplicate item `{}`", name);
             self.reporter.error(msg, ident.span());
         }
 
+        let key = (*ident.value(), kind);
+
         if exported {
-            self.exported_items.insert(*ident.value());
+            self.exported_items.insert(key);
         }
 
-        self.items.insert(*ident.value());
+        self.items.insert(key);
 
         self.data.insert(
-            *ident.value(),
+            key,
             LocalData {
                 state: State::Declared,
                 reads: 0,
@@ -121,15 +134,17 @@ impl Resolver {
         )
     }
 
-    pub fn declare(&mut self, ident: Spanned<SymbolId>) {
-        if self.data.get(&ident).is_some() {
+    pub fn declare(&mut self, ident: Spanned<SymbolId>, kind: ItemKind) {
+        let key = (*ident, kind);
+
+        if self.data.get(&key).is_some() {
             let name = self.symbols.lookup(ident.value());
 
             let msg = format!("The identifier `{}` has already been declared.", name);
             self.reporter.warn(msg, ident.span());
         }
         self.data.insert(
-            *ident.value(),
+            key,
             LocalData {
                 state: State::Declared,
                 reads: 0,
@@ -143,7 +158,7 @@ impl Resolver {
     }
 
     fn end_scope(&mut self) {
-        for (name, state) in self.data.end_scope_iter() {
+        for ((name, _), state) in self.data.end_scope_iter() {
             let LocalData { reads, state, span } = state;
 
             if reads == 0 || state == State::Declared {
@@ -153,9 +168,9 @@ impl Resolver {
         }
     }
 
-    fn define(&mut self, name: Spanned<SymbolId>) {
+    fn define(&mut self, name: Spanned<SymbolId>, kind: ItemKind) {
         self.data.update(
-            *name.value(),
+            (*name.value(), kind),
             LocalData {
                 state: State::Defined,
                 reads: 0,
@@ -201,7 +216,7 @@ impl<'ast, 'a> Visitor<'ast> for Resolver {
                 ty,
                 init,
             } => {
-                self.declare(*identifier);
+                self.declare(*identifier, ItemKind::Value);
 
                 if let Some(ty) = ty {
                     self.visit_type(ty)
@@ -210,7 +225,7 @@ impl<'ast, 'a> Visitor<'ast> for Resolver {
                 if let Some(init) = init {
                     self.visit_expr(init);
                 }
-                self.define(*identifier)
+                self.define(*identifier, ItemKind::Value)
             }
         }
     }
@@ -223,7 +238,7 @@ impl<'ast, 'a> Visitor<'ast> for Resolver {
                 self.visit_expr(lhs);
                 self.visit_expr(rhs)
             }
-            Expression::Identifier(name) => self.visit_name(name),
+            Expression::Identifier(name) => self.visit_name(name, ItemKind::Value),
             Expression::Binary { lhs, rhs, .. } => {
                 self.visit_expr(lhs);
                 self.visit_expr(rhs)
@@ -271,7 +286,7 @@ impl<'ast, 'a> Visitor<'ast> for Resolver {
 
     fn visit_type(&mut self, type_: &'ast Spanned<Type>) {
         match type_.value() {
-            Type::Identifier(name) => self.visit_name(name),
+            Type::Identifier(name) => self.visit_name(name, ItemKind::Type),
             Type::Array { ty, .. } => self.visit_type(ty),
             Type::Function { params, returns } => {
                 for param in params {
@@ -286,14 +301,16 @@ impl<'ast, 'a> Visitor<'ast> for Resolver {
         }
     }
 
-    fn visit_name(&mut self, ident: &'ast Spanned<SymbolId>) {
-        if let Some(state) = self.data.get_mut(&ident.value()) {
+    fn visit_name(&mut self, ident: &'ast Spanned<SymbolId>, kind: ItemKind) {
+        let key = (*ident.value(), kind);
+
+        if let Some(state) = self.data.get_mut(&key) {
             state.state = State::Read;
             state.reads += 1;
             return;
         } //check for ident name in local scope
 
-        if !self.items.contains(ident.value()) {
+        if !self.items.contains(&key) {
             let msg = format!(
                 "Unknown identifier `{}`",
                 self.symbols.lookup(ident.value())

@@ -3,6 +3,13 @@ use std::fmt::Display;
 use crate::{
     expression::Expression, intern::SymbolId, span::Spanned, statements::Statement, types::Type,
 };
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum ItemKind {
+    Type,
+    Value,
+}
+
 #[derive(Debug)]
 pub struct Program {
     pub functions: Vec<Spanned<Function>>,

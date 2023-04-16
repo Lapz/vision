@@ -1,6 +1,6 @@
 use crate::{
     expression::{self, Expression},
-    items::{Const, Function, FunctionParam, ParamKind, Trait, TypeAlias},
+    items::{Const, Function, FunctionParam, ItemKind, ParamKind, Trait, TypeAlias},
     prelude::{Spanned, Statement, SymbolId, Type},
 };
 
@@ -13,6 +13,6 @@ pub trait Visitor<'ast>: Sized {
     fn visit_trait(&mut self, trait_: &'ast Spanned<Trait>) -> Self::Output;
     fn visit_type(&mut self, type_: &'ast Spanned<Type>) -> Self::Output;
     fn visit_type_alias(&mut self, type_alias: &'ast Spanned<TypeAlias>) -> Self::Output;
-    fn visit_name(&mut self, name: &'ast Spanned<SymbolId>) -> Self::Output;
+    fn visit_name(&mut self, name: &'ast Spanned<SymbolId>, kind: ItemKind) -> Self::Output;
     fn visit_function_param(&mut self, param: &'ast Spanned<FunctionParam>) -> Self::Output;
 }

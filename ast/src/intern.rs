@@ -146,6 +146,21 @@ impl<T: InternId> Interner<T> {
         }
     }
 
+    pub fn new_with<const N: usize>(symbols: [&str; N]) -> Self {
+        let mut db = Self {
+            map: HashMap::new(),
+            strings: Vec::with_capacity(N),
+            buf: String::with_capacity(N),
+            full: Vec::with_capacity(N),
+        };
+
+        for i in symbols {
+            db.intern(i);
+        }
+
+        db
+    }
+
     pub fn intern(&mut self, item: &str) -> T {
         let borrowed = item.borrow();
 
@@ -183,6 +198,8 @@ impl<T: InternId> Interner<T> {
         self.strings[key.index() as usize]
     }
 }
+
+pub const DEFAULT_TYPES: [&'static str; 4] = ["number", "string", "boolean", "float"];
 
 #[cfg(test)]
 mod tests {
